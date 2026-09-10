@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+out/
+*.o
+*.a
+*.elf
+*.hex
+*.map
+
+# 误提交的编译产物（tests/ 下早期编译出的可执行文件）
+/tests/test_fade
+/tests/test_noise_gen
+/tests/test_schedule
+/tests/test_sleep_detect
+
+# 本地编辑/系统文件
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# 真机录制数据（含个人语音，绝不入库）
+recordings/
+*.wav
+*.pcm

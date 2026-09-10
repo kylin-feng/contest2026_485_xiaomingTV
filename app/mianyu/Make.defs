@@ -1,0 +1,36 @@
+############################################################################
+# apps/examples/mianyu/Make.defs
+############################################################################
+
+ifneq ($(CONFIG_LVX_USE_DEMO_CONTEST2026_485_MIANYU),y)
+endif
+
+MIANYU_DIR := $(APPDIR)/contest2026_485_xiaomingTV/app/mianyu
+
+VPATH += $(MIANYU_DIR)
+VPATH += $(MIANYU_DIR)/src
+VPATH += $(MIANYU_DIR)/hal/sim
+VPATH += $(MIANYU_DIR)/ui
+
+CSRCS += mianyu_app_main.c
+CSRCS += my_datetime.c
+CSRCS += my_sched.c
+CSRCS += my_noise.c
+CSRCS += my_sleep.c
+CSRCS += my_fade.c
+CSRCS += my_memory.c
+CSRCS += my_breath.c
+CSRCS += mianyu_hal_sim.c
+CSRCS += breathe_lvgl.c
+
+CFLAGS += -I$(MIANYU_DIR)/include
+CFLAGS += -I$(MIANYU_DIR)/hal
+
+DEPPATH += --dep-path $(MIANYU_DIR)
+DEPPATH += --dep-path $(MIANYU_DIR)/src
+DEPPATH += --dep-path $(MIANYU_DIR)/hal/sim
+DEPPATH += --dep-path $(MIANYU_DIR)/ui
+
+PRIORITY = 100
+STACKSIZE = 32768
+MODULE = CONFIG_LVX_USE_DEMO_CONTEST2026_485_MIANYU

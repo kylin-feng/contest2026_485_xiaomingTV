@@ -1,0 +1,11 @@
+config LVX_USE_DEMO_CONTEST2026_485_MIANYU
+	bool "\"Mianyu\" Soothing Sleep Agent (contest2026_485)"
+	default n
+	depends on LVX_USE_DEMOS
+	help
+		Enable the mianyu (眠语) soothing-sleep agent for the openvela AI
+		hardware developer contest 2026 (team xiaomingTV, id 485).
+
+		Builds app/mianyu/ as an openvela / NuttX application that drives:
+		noise synthesis, sleep-onset detection, fade-out, night-wake
+		soothing and dawn wake-up against the LVGL UI.
