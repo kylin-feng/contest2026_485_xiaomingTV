@@ -40,6 +40,13 @@
 #include <stdio.h>
 #include <string.h>
 
+/* 本文件刻意【不含 NuttX 头文件】，但应用入口沿用了 NuttX 的 FAR 修饰符。
+ * FAR 定义在 <nuttx/compiler.h>；在新型 NuttX 里它是空宏，但未定义就是
+ * 编译错误。这里给出兜底定义，既保留风格又不引入平台依赖。 */
+#ifndef FAR
+#  define FAR
+#endif
+
 /* PC 模拟：跑一晚到 07:10 后结束（便于 CI/评审一键自证）。
  * 真机编译时置 0，主循环永不退出（设备常开）。 */
 #ifndef MIANYU_DEMO_BOUNDED

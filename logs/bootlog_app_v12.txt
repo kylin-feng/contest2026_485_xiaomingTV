@@ -1,0 +1,65 @@
+WARN: LSM6DS3 not found at 0x6a on I2C1: -5
+ERROR: LSM6DS3 register failed on I2C1: -5
+ERROR: sf32lb52_lsm6ds3_initialize failed: -5
+WARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+INFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[audio] audio_test 任务已启动 (pid=5)
+[vlink] voice_link 任务已启动 (pid=6)
+[vlink] 自检 CRC16-CCITT-FALSE：4 组向量 全部吻合
+[vlink] 自检组帧：T_EVENT -> A5 5A 03 00 00 01 00 03 A3 C7 与 PC 侧一致
+[vlink] 自检容错：坏 CRC 帧被丢掉，后随好帧仍能解析
+[vlink] 自检解析器：整块喂 3/3 帧、逐字节喂 3/3 帧、坏帧容错 —— 全部通过
+[vlink] 协议自检全部通过（与 voice/board_link.py 逐字节一致）
+[audio] === 板载音频通路初始化（放音 + 采集）===
+[audio] 音频时钟已使能（HXT BUF_AUD + AUDCODEC 门控）
+[audio] PLL/数字块使能位已置（EN_DIG/SDM/CLK_DIG + 模拟偏置，未做锁频校准）
+[audio] REFGEN 使能（模拟参考源）
+[audio] HAL_AUDCODEC_Init -> 0
+[audio] Config_TChanel -> 0
+[audio] Config_RChanel -> 0
+[audio] 采集增益设为 +24 dB -> 0
+[audio] Transmit_DMA（6400 字节 / 2x1600 采样，循环）-> 0
+[audio] 放音 DMA 实际分配到通道 1（请求号 41），IRQ 66
+[audio] 放音 DMA TX irq 66 已挂载
+[audio] Config_Analog_DACPath -> 0
+[co5300][diag] VADD_EN (PA37) driven HIGH
+[bl][diag] backlight ON  (PA01=1) #1/3
+[audio] PA10 使能（功放 NS4150B）
+[audio] Receive_DMA（4096 字节 / 2048 采样，循环）-> 0
+[audio] 录音 DMA 实际分配到通道 4（请求号 39），IRQ 69
+[audio] 录音 DMA RX irq 69 已挂载（仅计数）
+[mianyu-ui] LVGL 线程已启动（/dev/lcd0）
+==============================================================
+安眠科技 · 主动式哄睡智能体 —— 主循环（HAL 接入版）
+无任何用户指令，全靠 cron + 传感器事件驱动一整晚
+[09:12:27] 设备就绪，等待睡前时刻
+[audio] Config_Analog_ADCPath 完成（MICBIAS + ADC1/ADC2 加电）
+[audio] ADC 总开关已开
+[audio] 放音：DAC 通路已起（DMA 循环放静音，等下行 PCM）
+[audio] 采集：ADC 通路已起（2048 采样环形 = 128 ms，16000 Hz）
+[audio] [init] ID=c0dec000 CFG=0000001b PLL_STAT=00000004
+[audio] [init] BG_CFG0=00001931 REFGEN_CFG=00000005 DAC_CFG=00000114
+[audio] [init] DAC_CH0_CFG=029b0689 DAC1_CFG=01f78001
+[audio] [init] ADC_CFG=00000a09 ADC_CH0_CFG=00010e9d ADC_ANA_CFG=0000002e
+[audio] [init] ADC1_CFG1=01125ab3 ADC1_CFG2=0000000e PLL_CFG6=00deb5c0
+[audio] [init] PLL_CFG0=5bd4ba00 CFG1=00003313 CFG2=00022f80 CFG3=78400000 CFG4=00890972 CFG5=1152d2d2
+[audio] [init] 关键位: EN_DIG(CFG2.b13)=1 EN_SDM(CFG3.b30)=1 EN_CLK_DIG(CFG4.b23)=1 EN_ANA(CFG0.b15)=1 | ADC_ENABLE(CFG.b0)=1 DAC_ENABLE(CFG.b1)=1 ADC_CH0_EN(b0)=1 ADC_CH0_DMA_EN(b
+[audio] [init] TX: ISR=00000000 CNDTR1=679 CCR1=00002abf CSELR1=27000029
+[audio] [init] RX: CNDTR4=756 CCR4=00002aaf CPAR4=50088040 req4=39(CSELR1.b24)
+[audio] [init] NVIC hwirq50 en=1 pend=0 (放音 NuttX irq66)
+[audio] [init] 计数 TX HT=3 TC=2 TE=0 | RX HT=0 TC=0
+[audio] 音频通路就绪，交给串口语音链路
+[vlink] 语音链路已建立：/dev/console，上行 256 样本/帧，协议 A5 5A + CRC16-CCITT
+[co5300][diag] init done: DISPLAY_ON issued
+[co5300][selftest] brightness set to 0xff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,255,255) 565=0xffff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,0,0) 565=0xf800
+[vlink] 上行 288 帧 下行 0 帧 | 麦克风 HT=36 TC=36(Δ8) | 待放=0 样本 | TX 150213 字节 丢帧 0 | CRC错=1 重同步=3 | cfg=MIC-UP
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,255,0) 565=0x07e0
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,0,255) 565=0x001f
+[co5300][cmdtest] done
+[co5300][selftest] GRAM fill RGB(255,255,255)
+[co5300][probe] 0x0A=0x0000009c 0x0B=0x00000000 0x0C=0x00000055 0x0D=0x00000008
+[co5300][probe] 0x0E=0x00000000 0x0F=0x000000c0 0x3A=0x00000055 0x52=0x000000ff
+[co5300][readback] GRAM(0x2E)=7f 00 00 7f -> NO MATCH -> pixel data is not landing (QSPI write/mode)
+[co5300][selftest] both tests done

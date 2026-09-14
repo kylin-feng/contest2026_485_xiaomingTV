@@ -1,5 +1,14 @@
 ############################################################################
-# apps/examples/mianyu/Make.defs
+# apps/demos/contest2026_485_mianyu/Make.defs
+#
+# 命名注意（踩过的坑）：
+#   核心层【API】是 my_ 前缀（my_sched_* / my_noise_* / my_hal_*），
+#   但【实现文件名】是 mianyu_ 前缀（mianyu_schedule.c 等）。
+#   照着 API 名字去写文件名会引用到一堆不存在的 my_*.c，构建直接失败。
+#   另外 my_datetime_* 没有独立文件，实现在 src/mianyu_schedule.c 内。
+#
+# 后端：真机链 hal/sf32lb52/（vela，NuttX RTC + LittleFS），
+#        PC 的 make app 链 hal/sim/。
 ############################################################################
 
 ifneq ($(CONFIG_LVX_USE_DEMO_CONTEST2026_485_MIANYU),y)
@@ -9,18 +18,17 @@ MIANYU_DIR := $(APPDIR)/contest2026_485_xiaomingTV/app/mianyu
 
 VPATH += $(MIANYU_DIR)
 VPATH += $(MIANYU_DIR)/src
-VPATH += $(MIANYU_DIR)/hal/sim
+VPATH += $(MIANYU_DIR)/hal/sf32lb52
 VPATH += $(MIANYU_DIR)/ui
 
 CSRCS += mianyu_app_main.c
-CSRCS += my_datetime.c
-CSRCS += my_sched.c
-CSRCS += my_noise.c
-CSRCS += my_sleep.c
-CSRCS += my_fade.c
-CSRCS += my_memory.c
-CSRCS += my_breath.c
-CSRCS += mianyu_hal_sim.c
+CSRCS += mianyu_schedule.c
+CSRCS += mianyu_noise_gen.c
+CSRCS += mianyu_sleep_detect.c
+CSRCS += mianyu_fade.c
+CSRCS += mianyu_sleep_memory.c
+CSRCS += mianyu_breathe.c
+CSRCS += mianyu_hal_vela.c
 CSRCS += breathe_lvgl.c
 
 CFLAGS += -I$(MIANYU_DIR)/include
@@ -28,7 +36,7 @@ CFLAGS += -I$(MIANYU_DIR)/hal
 
 DEPPATH += --dep-path $(MIANYU_DIR)
 DEPPATH += --dep-path $(MIANYU_DIR)/src
-DEPPATH += --dep-path $(MIANYU_DIR)/hal/sim
+DEPPATH += --dep-path $(MIANYU_DIR)/hal/sf32lb52
 DEPPATH += --dep-path $(MIANYU_DIR)/ui
 
 PRIORITY = 100

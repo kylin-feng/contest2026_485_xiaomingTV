@@ -11,16 +11,20 @@
 if(CONFIG_LVX_USE_DEMO_CONTEST2026_485_MIANYU)
 
   set(APP_NAME mianyu)
+
+  # 注意命名：核心层【API】是 my_ 前缀（my_sched_* / my_noise_* ...），
+  # 但【实现文件名】是 mianyu_ 前缀（src/mianyu_schedule.c 等）。
+  # 另：my_datetime_* 没有独立实现文件，它就在 src/mianyu_schedule.c 内。
+  # 后端：真机链 hal/sf32lb52/（vela，RTC + NuttX），PC 链 hal/sim/。
   set(APP_SRCS
     mianyu_app_main.c
-    src/my_datetime.c
-    src/my_sched.c
-    src/my_noise.c
-    src/my_sleep.c
-    src/my_fade.c
-    src/my_memory.c
-    src/my_breath.c
-    hal/sim/mianyu_hal_sim.c
+    src/mianyu_schedule.c
+    src/mianyu_noise_gen.c
+    src/mianyu_sleep_detect.c
+    src/mianyu_fade.c
+    src/mianyu_sleep_memory.c
+    src/mianyu_breathe.c
+    hal/sf32lb52/mianyu_hal_vela.c
     ui/breathe_lvgl.c
   )
   set(APP_INCDIRS
@@ -42,7 +46,7 @@ if(CONFIG_LVX_USE_DEMO_CONTEST2026_485_MIANYU)
     INCLUDE_DIRECTORIES
     ${APP_INCDIRS}
     COMPILE_FLAGS
-    -Wno-unused-parameter
+    -Wno-unused-parameter -DMIANYU_DEMO_BOUNDED=0
   )
 
 endif()

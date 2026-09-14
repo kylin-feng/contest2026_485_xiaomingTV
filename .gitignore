@@ -23,3 +23,7 @@ out/
 recordings/
 *.wav
 *.pcm
+# 板级调试工具的大体积二进制（本机保留，不入库）
+tools/backup/
+tools/sftool/
+tools/sftool-*.zip

@@ -6,18 +6,18 @@
  * 与 hal/sim 的区别只是「平台能力从哪来」：
  *   时间   = NuttX RTC（gettimeofday）
  *   存储   = LittleFS 文件（二进制版本化序列化，依赖零、掉电可恢复）
- *   音频出 = 音频框架 DMA 环形缓冲（TODO 接入，见下）
- *   麦克风 = 音频框架输入流（TODO 接入，见下）
+ *   音频出 = 板级 BSP 的放音环形缓冲（bsp_audio_play_pcm，已接真机验证）
+ *   麦克风 = 板级 BSP 的采集环形缓冲（bsp_audio_mic_read，已接真机验证）
  *   灯光   = LVGL 呼吸光晕（app/ui/breathe_lvgl.c）
  *   IMU    = 无板载 IMU（DevKit-LCD），恒 false
  *
  * 编译位置：本文件在 openvela 工程内编译（见 app/mianyu/CMakeLists.txt），
  * 不在 PC 的 `make` 里（PC 用 hal/sim）。移植时按 app/PORT_TO_OPENVELA.md 走。
  *
- * 【诚实边界】带 `[TODO 接 SDK]` 的段落是硬件接入点：具体 API（音频框架的
- * 流句柄、MIC 采集接口、LVGL 线程模型）以实际 vendor_sifli SDK 为准，本骨架
- * 只给出正确的数据流位置与调用契约，上真机时逐点替换，核心层一字不改。
- */
+ * 【诚实边界】音频三件套（init/play/mic_read）已接到板级 BSP 并上真机跑通；
+ * 仍带 `[TODO 接 SDK]` 的是存储挂载与 LVGL 灯光两条支路。 */
+#include <stdint.h>
+
 #include "mianyu_hal.h"
 #include "mianyu_common.h"
 
@@ -158,16 +158,56 @@ static my_mem_store_t   s_mem_store   = { vela_mem_save, vela_mem_load, NULL };
 const my_sched_store_t *my_hal_sched_store(void) { return &s_sched_store; }
 const my_mem_store_t   *my_hal_mem_store(void)   { return &s_mem_store; }
 
+/* ===================== 板载音频通路（vendor 侧） =====================
+ *
+ * 下面三个符号实现在 openvela 工程的板级 BSP 里：
+ *   vendor/sifli/boards/sf32lb52/sf32lb52_devkit_lcd/src/bsp_audio_test.c
+ * 它把 AUDCODEC 的 DAC 通路（A.33 -> NS4150B U0104 -> 喇叭 J0101，使能脚 PA10）
+ * 和 MIC 通路（M0100/WMM7037 -> MIC_BIAS -> 模拟 ADC -> DMA）都初始化好，
+ * 并对外只暴露这三个能力。核心层因此完全不碰寄存器。
+ *
+ * 链路参数：16kHz / 16bit / mono，与 my_pcm_t 一致，不需要重采样。 */
+extern int  bsp_audio_ready(void);
+extern int  bsp_audio_play_pcm(const int16_t *pcm, int count);
+extern void bsp_audio_play_clear(void);
+extern int  bsp_audio_mic_read(int16_t *dst, int max);
+extern void bsp_audio_set_amp(int on);
+extern void bsp_audio_set_volume_pct(int pct);
+
 /* ===================== 生命周期 ===================== */
 
 my_err_t my_hal_init(void)
 {
+    /* 音频通路是异步初始化的（板级 BSP 起了一个自己的线程，PLL/REFGEN/加电
+     * 顺序要等，见 bsp_audio_test.c 头部）。这里等它就绪再放行主循环，最多等 3s：
+     * 早于它就调 play_pcm/mic_read 会写进还没起来的 DMA。 */
+    int i;
+    for (i = 0; i < 300 && !bsp_audio_ready(); i++)
+    {
+        my_hal_sleep_ms(10);
+    }
+    if (!bsp_audio_ready())
+    {
+        return MY_ERR_IO;      /* 通路没起来：主循环会降级成"只有算法"跑 */
+    }
+
+    /* 功放始终使能（睡眠场景没有省电诉求，反而是唤醒时要能立刻出声）；
+     * 放音通路音量给满，响度由 my_fade_apply() 那层的增益曲线控制 ——
+     * 这样"淡入淡出"是软件算的，不会被两次量化夹掉动态。 */
+    bsp_audio_set_amp(1);
+    bsp_audio_set_volume_pct(100);
+
     /* [TODO 接 SDK] 挂载 LittleFS：NuttX 的 mount() / boardctl，确保
-     * VELA_STORE_DIR 可写；初始化音频框架与 RTC 同步（NTP/网络授时）。 */
+     * VELA_STORE_DIR 可写；RTC 同步（NTP/网络授时）。 */
     return MY_OK;
 }
 
-void my_hal_deinit(void) { /* [TODO 接 SDK] 释放音频流、关闭 LVGL */ }
+void my_hal_deinit(void)
+{
+    /* 停播并清空缓冲，避免退出时喇叭留一截尾音 */
+    bsp_audio_play_clear();
+    /* [TODO 接 SDK] 关闭 LVGL */
+}
 
 void my_hal_sleep_ms(int ms)
 {
@@ -180,26 +220,27 @@ void my_hal_sleep_ms(int ms)
 
 int my_hal_audio_play(const my_pcm_t *buf, int count)
 {
-    /* [TODO 接 SDK] 把 buf[0..count) 写入音频框架的播放 DMA 环形缓冲。
-     * 非阻塞：缓冲满则丢弃或等待，绝不阻塞主循环。参考 openvela 音频
-     * 框架（media_server / audio 驱动）的 PCM 写入接口。 */
-    (void)buf; (void)count;
-    return MY_ERR_UNSUPPORTED;
+    /* 直接写板级放音环形缓冲：非阻塞，缓冲不够就只写进去能写的部分，
+     * 返回值就是实际写进去的样本数（契约与 hal/mianyu_hal.h 一致）。
+     * 底层绝不在这里等 —— 主循环被卡住会连带把 MIC 采集也堵住。 */
+    if (!buf || count <= 0) return 0;
+    return bsp_audio_play_pcm((const int16_t *)buf, count);
 }
 
 void my_hal_audio_stop(void)
 {
-    /* [TODO 接 SDK] 清空播放缓冲、停流（入睡淡出归零后调用）。 */
+    /* 清空播放缓冲（入睡淡出归零后调用，避免残留尾音） */
+    bsp_audio_play_clear();
 }
 
 /* ===================== 麦克风输入 ===================== */
 
 int my_hal_mic_read(my_pcm_t *buf, int max_count)
 {
-    /* [TODO 接 SDK] 从音频框架的 MIC 输入环形缓冲拷贝已采到的 PCM。
-     * 16kHz/16bit/mono；无新数据返回 0。 */
-    (void)buf; (void)max_count;
-    return 0;
+    /* 从板级采集环形缓冲取"已经完整采到"的样本，无新数据返回 0。
+     * 底层按 DMA 的 HT/TC 计数算已产量，绝不读正在写的那一块。 */
+    if (!buf || max_count <= 0) return 0;
+    return bsp_audio_mic_read((int16_t *)buf, max_count);
 }
 
 /* ===================== 体动（IMU） ===================== */
