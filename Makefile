@@ -20,7 +20,37 @@
 #   2. 断言统计不要 grep 数 [PASS] 行数，要用程序打印的 MY_RESULT 行。
 #      两套口径必然对不齐（见 test 目标注释）。
 
-CC      ?= cc
+# 编译器选择：Linux/macOS 上 `cc` 一定有；Windows（MinGW-w64）上只有 gcc.exe，
+# 没有 cc.exe —— 而 README 写的就是 `mingw32-make test`，写死 CC ?= cc 会以
+#   process_begin: CreateProcess(NULL, cc ...) failed
+#   make (e=2): 系统找不到指定的文件
+# 收场，评审第一步就卡住。所以按平台分流。
+#
+# 平台怎么判（踩过的坑，别改回去）：
+#   * 不能只看 $(OS)：实测本机 shell 里 OS 是【空的】，ifeq($(OS),Windows_NT)
+#     恒假，分流形同虚设。
+#   * 也不能用 $(shell which cc || which gcc)：$(shell) 是通的，但它返回的是
+#     msys 风格全路径（/c/Users/.../gcc），而 make 在 Windows 上执行配方走
+#     CreateProcess【不经 shell】，这种路径解析不了。
+#   最后用的证据是 C:/Windows/System32/ntoskrnl.exe —— 只可能在 Windows 主机
+#   上存在，$(wildcard) 直接可判，不依赖任何外部命令。$(OS) 那条并行保留做兜底。
+#
+# 为什么是 := 而不是 ?= （最容易白折腾半小时的一条）：
+#   CC 是 make 的【内建变量】，出厂就带着默认值 "cc"。`?=` 的语义是"仅在变量
+#   未定义时赋值"，而 CC 永远"已定义"，所以 CC ?= gcc 写了等于没写，实测仍然
+#   去调 cc 然后报 (e=2)。改用 := 直接赋值。不用担心失去可覆盖性：命令行变量
+#   的优先级高于 makefile 里的任何赋值，`mingw32-make CC=clang test` 依然生效。
+ifeq ($(OS),Windows_NT)
+  MIANYU_ON_WINDOWS := 1
+endif
+ifneq ($(wildcard C:/Windows/System32/ntoskrnl.exe),)
+  MIANYU_ON_WINDOWS := 1
+endif
+ifdef MIANYU_ON_WINDOWS
+  CC := gcc
+else
+  CC := cc
+endif
 CSTD    ?= -std=c11
 CFLAGS  := -O2 -Wall -Wextra -Wshadow -Iapp/mianyu/include $(CSTD)
 LDLIBS  ?= -lm
@@ -57,8 +87,17 @@ demo: $(BUILD)/night_demo
 # app/mianyu/mianyu_app_main.c 是【真正的真机主循环】，时间/麦克风/音频/存储全走
 # hal/mianyu_hal.h 接口，此处链接 hal/sim 后端在 PC 上跑。上真机时换 hal/sf32lb52。
 # 同一套 app 代码，换 backend 即换平台——这是「双 HAL」的落点。
+#
+# 【别把 ui/*.c 加进来】：ui/breathe_lvgl.c 和 ui/watch_ui.c 都 #include
+# <lvgl/lvgl.h>，只在 openvela 工程里编译。PC 侧界面接口由 hal/sim 提供空实现
+# （见 mianyu_hal_sim.c 里"手表界面"那段），主循环照样能整晚跑完。
+# 曾把 breathe_lvgl.c 写进 APP_SRCS，结果是 PC 上 make app 直接找不到 lvgl.h。
+#
+# hal/sim/pc_main.c 是 PC 侧进程入口：真机上应用入口叫 mianyu_main()，由
+# nuttx_add_application 自动把 "main" 别名过去；PC 没这套框架，得自己提供一个
+# main，否则链接报 undefined reference to `WinMain'。详见该文件头注释。
 APP_CFLAGS := $(CFLAGS) -Iapp/mianyu/hal -Iapp/mianyu -Iapp/mianyu/ui
-APP_SRCS   := $(SRCS) app/mianyu/mianyu_app_main.c app/mianyu/hal/sim/mianyu_hal_sim.c app/mianyu/ui/breathe_lvgl.c
+APP_SRCS   := $(SRCS) app/mianyu/mianyu_app_main.c app/mianyu/hal/sim/mianyu_hal_sim.c app/mianyu/hal/sim/pc_main.c
 
 $(BUILD)/mianyu_app: $(APP_SRCS) | $(BUILD)
 	@$(CC) $(APP_CFLAGS) -o $@ $(APP_SRCS) $(LDLIBS)

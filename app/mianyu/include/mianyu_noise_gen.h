@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 安眠科技 · 噪声合成模块
+ * 眠语 · 噪声合成模块
  *
  * 为什么用算法合成而不是播放音频文件（技术报告 3.4 / 4.5）：
  *   黄山派仅 16MB NOR Flash，ROOT 分区默认 8480KB，LittleFS sector 4KB。

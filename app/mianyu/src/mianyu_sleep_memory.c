@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 安眠科技 · 睡眠记忆持久化实现
+ * 眠语 · 睡眠记忆持久化实现
  * 设计动机与三个工程约束见 mianyu_sleep_memory.h。
  *
  * 环形缓冲不变量：

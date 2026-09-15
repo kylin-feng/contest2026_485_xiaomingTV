@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 安眠科技 · 入睡判定（核心 IP，以 MIC 为主判据，IMU 可选增强）
+ * 眠语 · 双模态入睡判定（核心 IP）
  *
  * 为什么是这个算法（技术报告 3.3 / 3.5）：
  *   黄山派 SF32LB525UC6 是 Cortex-M33，无独立 HiFi4 DSP，不能跑重型频域分析。

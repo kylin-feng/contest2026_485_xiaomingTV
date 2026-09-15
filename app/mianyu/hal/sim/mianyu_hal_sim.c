@@ -15,6 +15,7 @@
  * 这 100ms 是 RTC 自己走的，MIC 是硬件采的，主循环代码一行不变。
  */
 #include "mianyu_hal.h"
+#include "mianyu_ui.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -249,3 +250,73 @@ void my_hal_light_set(int level_pct)
 
 const my_sched_store_t *my_hal_sched_store(void) { return &s_sched_store; }
 const my_mem_store_t   *my_hal_mem_store(void)   { return &s_mem_store; }
+
+/* ===================== 手表界面（mianyu_ui.h） =====================
+ *
+ * 模拟器没有屏，但【不能没有这一组符号】：app/mianyu/mianyu_app_main.c 是一份
+ * 代码两端跑，主循环里那几处 my_hal_ui_* 调用在真机上连着 LVGL 界面、在 PC 上
+ * 连着这里。少了这层，PC 侧链接直接报未定义引用，评审的「make app」就跑不起来
+ * —— 双 HAL 的约定正是"核心层与应用壳一字不改，只换后端"。
+ *
+ * 这里的实现策略是【只记录、不渲染】：
+ *   主循环推快照  → 存下来；相位一变就打一行，让 make app 的输出里能直接看到
+ *                   「表盘待机 → 引导中 → 判定中 → 已睡着」这条界面状态流。
+ *   界面发请求    → 模拟器无人点屏，正常永远是 false；但保留完整读写路径，
+ *                   便于自动化脚本注入（例如想测"用户手动点开始"这条分支）。
+ */
+
+static my_ui_state_t s_ui_snapshot;      /* 最近一份快照（主循环写、界面读） */
+static bool          s_ui_start_req;     /* 界面点了「开始哄睡」 */
+static bool          s_ui_stop_req;      /* 界面长按「返回」= 结束今晚 */
+static bool          s_ui_phase_seen;    /* 是否已经打过至少一行 */
+static my_ui_phase_t s_ui_last_phase;
+
+static const char *ui_phase_name(my_ui_phase_t p)
+{
+    switch (p) {
+    case MY_UI_PHASE_IDLE:       return "表盘待机";
+    case MY_UI_PHASE_GUIDING:    return "引导中";
+    case MY_UI_PHASE_DETECTING:  return "判定中";
+    case MY_UI_PHASE_ASLEEP:     return "已睡着";
+    case MY_UI_PHASE_NIGHT_WAKE: return "夜醒安抚";
+    default:                     return "未知";
+    }
+}
+
+void my_hal_ui_update(const my_ui_state_t *st)
+{
+    if (st == NULL) return;
+    s_ui_snapshot = *st;
+
+    /* 相位翻转才打，避免 10Hz 刷屏（真机上对应的就是"只在状态跳变时重建界面"） */
+    if (!s_ui_phase_seen || s_ui_snapshot.phase != s_ui_last_phase) {
+        printf("[ui] 界面状态 → %-8s  灯=%3d%%  音量=%3d%%  已过=%ds  夜醒=%d\n",
+               ui_phase_name(s_ui_snapshot.phase),
+               s_ui_snapshot.light_pct, s_ui_snapshot.volume_pct,
+               s_ui_snapshot.elapsed_sec, s_ui_snapshot.night_wakes);
+        s_ui_phase_seen = true;
+        s_ui_last_phase = s_ui_snapshot.phase;
+    }
+}
+
+const my_ui_state_t *my_hal_ui_state(void)
+{
+    return &s_ui_snapshot;
+}
+
+void my_hal_ui_request_start(void) { s_ui_start_req = true; }
+void my_hal_ui_request_stop(void)  { s_ui_stop_req  = true; }
+
+bool my_hal_ui_take_start_request(void)
+{
+    bool r = s_ui_start_req;
+    s_ui_start_req = false;
+    return r;
+}
+
+bool my_hal_ui_take_stop_request(void)
+{
+    bool r = s_ui_stop_req;
+    s_ui_stop_req = false;
+    return r;
+}

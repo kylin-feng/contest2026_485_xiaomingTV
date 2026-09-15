@@ -16,6 +16,11 @@ if(CONFIG_LVX_USE_DEMO_CONTEST2026_485_MIANYU)
   # 但【实现文件名】是 mianyu_ 前缀（src/mianyu_schedule.c 等）。
   # 另：my_datetime_* 没有独立实现文件，它就在 src/mianyu_schedule.c 内。
   # 后端：真机链 hal/sf32lb52/（vela，RTC + NuttX），PC 链 hal/sim/。
+  # 界面：ui/watch_ui.c 是手表界面（表盘页 + 哄睡页）。
+  #   ui/breathe_lvgl.c 是最早那版只有一个光晕的渲染壳，现在由 watch_ui.c
+  #   接管，不再参与编译（留着当移植过程中的存档）。
+  #   ui/lv_font_mianyu_16.c / _32.c 是界面用的中文字体，用文泉驿微米黑裁的，
+  #   只含界面上出现过的字，体积很小。重新生成的办法见 ui/README.md。
   set(APP_SRCS
     mianyu_app_main.c
     src/mianyu_schedule.c
@@ -25,11 +30,14 @@ if(CONFIG_LVX_USE_DEMO_CONTEST2026_485_MIANYU)
     src/mianyu_sleep_memory.c
     src/mianyu_breathe.c
     hal/sf32lb52/mianyu_hal_vela.c
-    ui/breathe_lvgl.c
+    ui/watch_ui.c
+    ui/lv_font_mianyu_16.c
+    ui/lv_font_mianyu_32.c
   )
   set(APP_INCDIRS
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${CMAKE_CURRENT_LIST_DIR}/hal
+    ${CMAKE_CURRENT_LIST_DIR}/ui
   )
 
   # The first source file in APP_SRCS is automatically aliased by NuttX

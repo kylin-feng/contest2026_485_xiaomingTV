@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 安眠科技 · 呼吸光晕 LVGL 渲染层（openvela 移植资产）
+ * 眠语 · 呼吸光晕 LVGL 渲染层（openvela 移植资产）
  *
  * ============================ 职责边界 ============================
  *
@@ -32,14 +32,21 @@
  */
 #include <lvgl/lvgl.h>
 
+#include "breathe_lvgl.h"
 #include "mianyu_breathe.h"
+
+/* 中文字库：由 lv_font_conv 从「文泉驿微米黑」抽取界面用到的字形生成
+ * （吸气 屏息 呼气 放松 跟着光 眠语 · …），随工程一起编译。
+ * 不依赖 LVGL 的 montserrat 系列——它不含 CJK 字形。 */
+LV_FONT_DECLARE(lv_font_mianyu_32);
+LV_FONT_DECLARE(lv_font_mianyu_16);
 
 /* ---- 颜色与布局（黄山派 AMOLED 390×450；模拟器按同一相对比例） ---- */
 #define MB_WARM_AMBER       lv_color_hex(0xFFB26B)   /* ~2700K 暖光 */
 #define MB_BG_NEAR_BLACK    lv_color_hex(0x050505)   /* AMOLED 纯黑省电且零光晕 */
 #define MB_TEXT_DIM         lv_color_hex(0x555555)   /* 低亮度灰（不抢眼） */
 
-typedef struct {
+struct breathe_widget_s {
     /* 引擎实例（节奏源） */
     my_breathe_t      engine;
     /* LVGL 对象：三层光晕 + 相位文字 */
@@ -51,7 +58,11 @@ typedef struct {
     /* 布局缓存 */
     lv_coord_t        cx, cy;        /* 光晕圆心 */
     lv_coord_t        r_base;        /* 内核基准半径 */
-} breathe_widget_t;
+    /* 外部亮度驱动（主循环的 my_hal_light_set 走这条路） */
+    bool              ext_driven;
+    int               ext_level;
+    int               shown_level;   /* 上一帧显示的亮度，用于跳过重复刷新 */
+};
 
 /* 相位 → 中文提示 */
 static const char *phase_text(my_breath_phase_t p)
@@ -109,13 +120,13 @@ breathe_widget_t *breathe_create(lv_obj_t *parent, const my_breathe_cfg_t *cfg)
     /* 相位文字（居中的大字 + 底部小字提示） */
     w->label_phase = lv_label_create(parent);
     lv_obj_set_style_text_color(w->label_phase, lv_color_hex(0xCCCCCC), 0);
-    lv_obj_set_style_text_font(w->label_phase, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(w->label_phase, &lv_font_mianyu_32, 0);
     lv_label_set_text(w->label_phase, "放松");
     lv_obj_align(w->label_phase, LV_ALIGN_CENTER, 0, 0);
 
     w->label_hint = lv_label_create(parent);
     lv_obj_set_style_text_color(w->label_hint, MB_TEXT_DIM, 0);
-    lv_obj_set_style_text_font(w->label_hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(w->label_hint, &lv_font_mianyu_16, 0);
     lv_label_set_text(w->label_hint, "跟着光 吸气·屏息·呼气");
     lv_obj_align(w->label_hint, LV_ALIGN_BOTTOM_MID, 0, -28);
 
@@ -128,18 +139,36 @@ static void breathe_timer_cb(lv_timer_t *timer)
     breathe_widget_t *w = lv_timer_get_user_data(timer);
     if (!w) return;
 
+    /* 引擎始终推进：相位文字与内核尺寸都靠它。外部驱动模式下
+     * 只是不用它的亮度值，改用主循环传下来的 ext_level，
+     * 这样光影与音频、日志严格同源。 */
     my_breathe_tick(&w->engine, 100);          /* 100ms 一跳 */
 
-    int lvl   = my_breathe_level_pct(&w->engine);
+    int lvl;
+    if (w->ext_driven) {
+        lvl = w->ext_level;
+    } else {
+        lvl = my_breathe_level_pct(&w->engine);
+    }
     my_breath_phase_t ph = my_breathe_get_phase(&w->engine);
 
-    /* 亮度映射：引擎 trough..peak → LVGL 透明度 30..255。
-     * 映射下限 30（不是 0）：渲染层也遵守"不全灭"约定，避免一暗到底
-     * 变成黑屏让用户以为灯坏了。上限 255 = 峰值不削顶。 */
+    /* 亮度映射：引擎 trough..peak → LVGL 透明度。
+     * 外部驱动时下界取 0（灯灭 = 真灭，AMOLED 像素级熄灭，夜间零光害）；
+     * 自驱时下限 30，遵守"不全灭"约定，避免一暗到底像黑屏。 */
     int lo = w->engine.cfg.trough_pct, hi = w->engine.cfg.peak_pct;
+    if (w->ext_driven) lo = 0;
     int span = (hi - lo) > 0 ? (hi - lo) : 1;
-    lv_opa_t opa = LV_OPA_30 + (lv_opa_t)((lvl - lo) * 225L / span);
-    if (opa > 255) opa = 255;
+    if (lvl < lo) lvl = lo;
+    if (lvl > hi) lvl = hi;
+
+    lv_opa_t opa;
+    if (w->ext_driven && lvl <= 0) {
+        opa = 0;                                    /* 灯灭 */
+    } else {
+        int obase = w->ext_driven ? 24 : LV_OPA_30;
+        opa = (lv_opa_t)(obase + (lvl - lo) * (255 - obase) / span);
+        if (opa > 255) opa = 255;
+    }
 
     lv_obj_set_style_bg_opa(w->halo_outer, opa / 5, 0);   /* 外层最淡 */
     lv_obj_set_style_bg_opa(w->halo_mid,   opa / 2, 0);
@@ -159,12 +188,32 @@ static void breathe_timer_cb(lv_timer_t *timer)
     lv_label_set_text_fmt(w->label_hint, "亮度 %d%% · %s",
                           lvl, ph == MY_BREATH_INHALE ? "跟上吸气" :
                                ph == MY_BREATH_EXHALE ? "慢慢呼" : "稳住");
+
+    w->shown_level = lvl;
 }
 
 /* 启动呼吸灯。返回 LVGL 定时器句柄（可 lv_timer_del 停止）。 */
 lv_timer_t *breathe_start(breathe_widget_t *w)
 {
     return lv_timer_create(breathe_timer_cb, 100, w);
+}
+
+/* 外部亮度驱动：主循环的 my_hal_light_set 最终落到这里。
+ * 必须在 LVGL 线程内调用（HAL 后端用 lv_async_call 投递）。 */
+void breathe_set_level(breathe_widget_t *w, int level_pct)
+{
+    if (!w) return;
+    if (level_pct < 0)   level_pct = 0;
+    if (level_pct > 100) level_pct = 100;
+    w->ext_driven = true;
+    w->ext_level  = level_pct;
+}
+
+/* 交回内部引擎驱动（独立 demo 用） */
+void breathe_set_level_auto(breathe_widget_t *w)
+{
+    if (!w) return;
+    w->ext_driven = false;
 }
 
 /* 切换夜间模式：峰值压暗 + 谷值更低（不打断节奏，只改引擎配置） */

@@ -1,11 +1,16 @@
+# 眠语 (mianyu) —— 主动式哄睡智能体 / contest2026 team xiaomingTV (id 485)
+#
+# 【踩坑】不要写 "depends on LVX_USE_DEMOS"。
+#   openvela 全树没有任何 Kconfig 定义 LVX_USE_DEMOS，一旦依赖它，
+#   本选项在 menuconfig 里会永远不可见，defconfig 也选不中。
+#   参照同级的 packages/demos/Chinese_Chess/Kconfig —— 只声明 config 本身。
 config LVX_USE_DEMO_CONTEST2026_485_MIANYU
-	bool "\"Mianyu\" Soothing Sleep Agent (contest2026_485)"
+	bool "Mianyu soothing sleep agent (contest2026_485)"
 	default n
-	depends on LVX_USE_DEMOS
 	help
-		Enable the mianyu (眠语) soothing-sleep agent for the openvela AI
-		hardware developer contest 2026 (team xiaomingTV, id 485).
+		Enable the mianyu (眠语) soothing-sleep agent for the openvela
+		AI hardware developer contest 2026 (team xiaomingTV, id 485).
 
-		Builds app/mianyu/ as an openvela / NuttX application that drives:
-		noise synthesis, sleep-onset detection, fade-out, night-wake
-		soothing and dawn wake-up against the LVGL UI.
+		Runs the platform-independent core (schedule / noise synthesis /
+		sleep-onset detection / fade-out / night memory) on NuttX, with a
+		breathing-light halo rendered through LVGL.

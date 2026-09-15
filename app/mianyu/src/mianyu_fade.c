@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 安眠科技 · 音量淡出曲线引擎实现
+ * 眠语 · 音量淡出曲线引擎实现
  * 设计动机与三条翻车对策见 mianyu_fade.h 头部注释。
  *
  * 计算量：apply() 每样本 1 次 int64 乘法 + 移位，320 样本(20ms@16kHz) < 5us。

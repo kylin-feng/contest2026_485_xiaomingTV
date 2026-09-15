@@ -31,6 +31,7 @@
  * 同一条逻辑链，night_demo 用来快速解释，本文件用来真正落地。
  */
 #include "mianyu_hal.h"
+#include "mianyu_ui.h"
 #include "mianyu_sleep_detect.h"
 #include "mianyu_schedule.h"
 #include "mianyu_sleep_memory.h"
@@ -73,6 +74,16 @@ typedef struct {
     int64_t session_start_min;   /* 睡前流程起点（绝对分钟） */
     int     night_wake_count;    /* 夜醒次数（喂给记忆） */
     int     log_tick;            /* 每 5s 打一行状态的计数 */
+
+    /* ---- 下面这些只服务手表界面 ---- */
+    bool    session_active;      /* 今晚是否在跑（自动到点或用户点了按钮） */
+    int     session_ticks;       /* 本次已跑的 tick 数（10 tick = 1 秒） */
+    int     ui_night_wake_ticks; /* 夜醒安抚还要显示多久（归零后回"已睡着"） */
+    int     ui_volume_pct;       /* 当前噪声音量，界面直接显示这个 */
+    bool    last_valid;          /* 昨晚有记录吗 */
+    int     last_total_min;
+    int     last_onset_sec;
+    int     last_wakes;
 } app_t;
 
 static void print_status(app_t *a)
@@ -88,6 +99,105 @@ static void print_status(app_t *a)
            m->regularity, m->breath_rate, m->movement, vol, lamp);
 }
 
+/* ============================ 今晚的开始与结束 ============================
+ *
+ * 有两个入口会走到 start_bedtime：cron 到点自己触发（默认，也是这个作品的
+ * 主张），以及用户在表盘上点了「开始哄睡」（今晚想早点睡时的备用入口）。
+ * 两条路进来之后完全一样 —— 按钮不是"控制手段"，只是"提前一点"。 */
+
+static void start_bedtime(app_t *a, const my_datetime_t *dt, const char *why)
+{
+    printf("[%02d:%02d:%02d] 睡前流程启动（%s）：棕噪 70%% 淡入 + 呼吸引导灯\n",
+           dt->hour, dt->minute, dt->second, why);
+    my_noise_set_kind(&a->noise, MY_NOISE_BROWN);
+    my_noise_set_level(&a->noise, 70);
+    a->ui_volume_pct = 70;
+    a->aid_kind = MY_AID_BROWN;
+    a->session_start_min = my_datetime_to_minutes(dt);
+    a->session_active   = true;
+    a->session_ticks    = 0;
+    a->ui_night_wake_ticks = 0;
+    my_fade_start(&a->fade);
+    /* 呼吸引导灯：峰值 60，谷值 4（睡前低亮，不全灭） */
+    a->breathe.cfg.peak_pct = 60; a->breathe.cfg.trough_pct = 4;
+    a->light_on = true;
+    a->faded_out = false;
+    my_breathe_reset(&a->breathe);
+    /* 重置入睡判定：让 first_asleep_sec 正好等于「从睡前流程开始的潜伏期」 */
+    my_sleep_reset_state(&a->det);
+}
+
+/* 用户长按「返回」才是真的结束今晚。表盘上短按返回只是切页，不动声音。 */
+static void stop_session(app_t *a, const my_datetime_t *dt)
+{
+    printf("[%02d:%02d:%02d] 今晚结束（用户取消）：停声 + 判定复位\n",
+           dt->hour, dt->minute, dt->second);
+    my_hal_audio_stop();
+    a->session_active      = false;
+    a->light_on            = false;
+    a->faded_out           = true;
+    a->ui_night_wake_ticks = 0;
+    a->ui_volume_pct       = 0;
+    my_sleep_reset_state(&a->det);
+}
+
+/* ============================ 推给手表界面 ============================
+ *
+ * 界面不需要懂内部状态机，它只要一个「现在该显示什么」的快照。
+ * 每 100ms 推一次，LVGL 线程那边读走渲染。结构体全是 int，
+ * 两个线程之间拷贝是安全的，不需要加锁。 */
+
+static void publish_ui(app_t *a)
+{
+    my_ui_state_t st;
+    memset(&st, 0, sizeof(st));
+
+    st.hour    = a->now.hour;
+    st.minute  = a->now.minute;
+    st.month   = a->now.month;
+    st.day     = a->now.day;
+    st.weekday = a->now.wday;
+
+    /* 今晚计划：任务表里第一条启用的睡前任务。表盘上「今晚22:30自动开始」
+     * 那一行就是从这来的 —— 这一行才是这个作品的主张：不点也会开始。 */
+    int n = my_sched_task_count(&a->sched);
+    for (int i = 0; i < n; i++) {
+        const my_task_t *t = my_sched_get_task(&a->sched, i);
+        if (t && t->enabled && t->kind == MY_TASK_BEDTIME && t->fb_hour >= 0) {
+            st.plan_valid = true;
+            st.plan_hour  = t->fb_hour;
+            st.plan_min   = t->fb_minute;
+            break;
+        }
+    }
+
+    /* 现在该显示哪个阶段 */
+    if (!a->session_active) {
+        st.phase = MY_UI_PHASE_IDLE;
+    } else if (a->ui_night_wake_ticks > 0) {
+        st.phase = MY_UI_PHASE_NIGHT_WAKE;
+    } else {
+        switch (my_sleep_get_state(&a->det)) {
+        case MY_SLEEP_ASLEEP: st.phase = MY_UI_PHASE_ASLEEP;    break;
+        case MY_SLEEP_DROWSY: st.phase = MY_UI_PHASE_DETECTING; break;
+        default:              st.phase = MY_UI_PHASE_GUIDING;   break;
+        }
+    }
+
+    st.light_pct   = a->light_on ? my_breathe_level_pct(&a->breathe) : 0;
+    st.volume_pct  = a->ui_volume_pct;
+    st.aid_kind    = a->aid_kind;
+    st.elapsed_sec = a->session_ticks / 10;      /* 10 tick = 1 秒 */
+    st.night_wakes = a->night_wake_count;
+
+    st.last_valid     = a->last_valid;
+    st.last_total_min = a->last_total_min;
+    st.last_onset_sec = a->last_onset_sec;
+    st.last_wakes     = a->last_wakes;
+
+    my_hal_ui_update(&st);
+}
+
 /* ============================ cron 回调（真机动作入口） ============================ */
 
 static void on_task_fire(const my_task_t *task, const my_datetime_t *dt,
@@ -97,20 +207,7 @@ static void on_task_fire(const my_task_t *task, const my_datetime_t *dt,
 
     switch (task->kind) {
     case MY_TASK_BEDTIME:
-        printf("[%02d:%02d:%02d] ★ 睡前流程启动：棕噪 70%% 淡入 + 呼吸引导灯%s\n",
-               dt->hour, dt->minute, dt->second, is_catchup ? "（补触发）" : "");
-        my_noise_set_kind(&a->noise, MY_NOISE_BROWN);
-        my_noise_set_level(&a->noise, 70);
-        a->aid_kind = MY_AID_BROWN;
-        a->session_start_min = my_datetime_to_minutes(dt);
-        my_fade_start(&a->fade);
-        /* 呼吸引导灯：4-7-8 峰值 60，谷值 4（睡前低亮，不全灭） */
-        a->breathe.cfg.peak_pct = 60; a->breathe.cfg.trough_pct = 4;
-        a->light_on = true;
-        a->faded_out = false;
-        my_breathe_reset(&a->breathe);
-        /* 重置入睡判定：让 first_asleep_sec 正好等于「从睡前流程开始的潜伏期」 */
-        my_sleep_reset_state(&a->det);
+        start_bedtime(a, dt, is_catchup ? "cron 补触发" : "cron 到点");
         break;
 
     case MY_TASK_MORNING_WAKE: {
@@ -138,6 +235,17 @@ static void on_task_fire(const my_task_t *task, const my_datetime_t *dt,
         rec.quality = (uint8_t)(a->night_wake_count == 0 ? 88 : 80);
         my_mem_add(&a->mem, &rec);
         my_mem_flush(&a->mem);
+
+        /* 表盘上那行「昨晚睡了…」直接用这份内存副本，不用去翻档案文件 */
+        a->last_valid     = true;
+        a->last_total_min = rec.total_sleep_min;
+        a->last_onset_sec = rec.sleep_onset_sec;
+        a->last_wakes     = rec.night_wake_count;
+        a->session_active = false;
+        a->ui_volume_pct  = 0;
+        a->faded_out      = true;
+        a->ui_night_wake_ticks = 0;
+        my_hal_audio_stop();
 
         /* 晨间简报（记忆聚合输出） */
         my_sleep_summary_t sum;
@@ -188,6 +296,18 @@ int mianyu_main(int argc, FAR char *argv[])
     my_breathe_init(&a.breathe, NULL);
     my_mem_init(&a.mem, my_hal_mem_store());
     my_mem_load(&a.mem);
+
+    /* 开机时把最近一晚翻出来，喂给表盘最下面那行简报（没有就显示"还没有记录"） */
+    {
+        my_sleep_summary_t s0;
+        memset(&s0, 0, sizeof(s0));
+        if (my_mem_summarize(&a.mem, 1, &s0) == MY_OK && s0.valid_days > 0) {
+            a.last_valid     = true;
+            a.last_total_min = (int)s0.avg_total_min;
+            a.last_onset_sec = (int)s0.avg_onset_sec;
+            a.last_wakes     = (int)(s0.avg_wake_count / 100);
+        }
+    }
     my_sched_init(&a.sched, my_hal_sched_store(), on_task_fire, &a);
     /* 开机读盘：有历史作息则用，空盘/读盘失败则回退默认作息 */
     if (my_sched_load(&a.sched) != MY_OK || my_sched_task_count(&a.sched) == 0)
@@ -208,6 +328,21 @@ int mianyu_main(int argc, FAR char *argv[])
         my_hal_sleep_ms(TICK_MS);            /* 推进时间（真机 sleep 真实 100ms） */
         my_hal_time_now(&a.now);
         my_sched_tick(&a.sched, &a.now);     /* cron 触发检查 */
+
+        /* ⓪ 表盘上那两个操作：点「开始哄睡」、长按「返回」结束今晚。
+         * 界面只负责发请求，真正动手的还是这里 —— 动作只有一个入口。 */
+        if (my_hal_ui_take_start_request() && !a.session_active) {
+            start_bedtime(&a, &a.now, "用户在表盘上点了开始哄睡");
+        }
+        if (my_hal_ui_take_stop_request() && a.session_active) {
+            stop_session(&a, &a.now);
+        }
+
+        /* 今晚的计时：界面上的「已用」和夜醒提示都靠它 */
+        if (a.session_active) {
+            a.session_ticks++;
+            if (a.ui_night_wake_ticks > 0) a.ui_night_wake_ticks--;
+        }
 
         /* ① 麦克风 → 入睡判定 */
         my_pcm_t mic[SAMPLES_PER_TICK];
@@ -246,17 +381,23 @@ int mianyu_main(int argc, FAR char *argv[])
             printf("[%02d:%02d:%02d] ★ 夜醒安抚：极低音量棕噪 20%% + 微光\n",
                    a.now.hour, a.now.minute, a.now.second);
             my_noise_set_level(&a.noise, 20);
+            a.ui_volume_pct = 20;
             my_fade_start(&a.fade);
             a.breathe.cfg.peak_pct = 20; a.breathe.cfg.trough_pct = 3;
             a.light_on = true;
             a.faded_out = false;         /* 允许再次入睡后二次淡出 */
+            /* 「安抚中」这一屏只停 30 秒就回到安静的「已睡着」，
+             * 免得屏幕一直亮着反而打扰人。 */
+            a.ui_night_wake_ticks = 300;
             my_breathe_reset(&a.breathe);
         }
 
-        /* ⑤ 音频：渲染噪声 → 施加增益 → 出声 */
+        /* ⑤ 音频：渲染噪声 → 施加增益 → 出声。
+         * 用户长按返回结束今晚后，session_active 落下，这里就不再出声。 */
         my_fade_tick(&a.fade, TICK_MS);
         my_fade_phase_t ph = my_fade_get_phase(&a.fade);
-        if (ph == MY_FADE_IN || ph == MY_FADE_HOLD || ph == MY_FADE_OUT) {
+        if (a.session_active &&
+            (ph == MY_FADE_IN || ph == MY_FADE_HOLD || ph == MY_FADE_OUT)) {
             my_pcm_t out[SAMPLES_PER_TICK];
             my_noise_render(&a.noise, out, SAMPLES_PER_TICK);
             my_fade_apply(&a.fade, out, SAMPLES_PER_TICK, my_fade_gain_q15(&a.fade));
@@ -267,8 +408,13 @@ int mianyu_main(int argc, FAR char *argv[])
         my_breathe_tick(&a.breathe, TICK_MS);
         my_hal_light_set(a.light_on ? my_breathe_level_pct(&a.breathe) : 0);
 
-        /* ⑦ 每 5 秒一行状态（真机可关，演示保留） */
-        if (++a.log_tick >= 5000 / TICK_MS) { a.log_tick = 0; print_status(&a); }
+        /* ⑦ 推一份状态给手表界面（界面自己按 100ms 刷，这里只管推） */
+        publish_ui(&a);
+
+        /* ⑧ 每 5 秒一行状态（真机可关，演示保留） */
+        if (++a.log_tick >= 5000 / TICK_MS) {
+            a.log_tick = 0; print_status(&a);
+        }
 
 #if MIANYU_DEMO_BOUNDED
         /* 晨唤简报已由 MORNING_WAKE 回调打出；次日 07:10 后结束演示 */
