@@ -320,3 +320,29 @@ bool my_hal_ui_take_stop_request(void)
     s_ui_stop_req = false;
     return r;
 }
+
+/* ===================== 语音链路：判定上行 / 光引导下行 =====================
+ *
+ * 模拟器上没有串口链路，所以：
+ *   · 上行只打一行日志 —— 作用是对着 `make app` 的输出核对"判定结果
+ *     是何时报出去的"（真机上这一行对应的是一个 EVENT 帧）。
+ *   · 下行恒返回 false —— 模拟器上没人给板子发命令。真机那条路见
+ *     hal/sf32lb52/mianyu_hal_vela.c 与 board/bsp_voice_link.c。
+ */
+void my_hal_sleep_report(int state, int conf_pct, int resp_bpm)
+{
+    static const char *k_name[3] = { "清醒", "困倦", "已入睡" };
+    const char *nm;
+
+    if (state < 0 || state > 2) return;
+    nm = k_name[state];
+
+    printf("[link] ↑ 上报入睡判定：%-6s 置信=%3d%%  呼吸=%2d次/分\n",
+           nm, conf_pct, resp_bpm);
+}
+
+bool my_hal_remote_cmd_take(my_remote_cmd_t *out)
+{
+    (void)out;
+    return false;
+}

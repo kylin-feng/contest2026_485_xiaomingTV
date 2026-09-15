@@ -148,7 +148,7 @@ python tests/pc_build.py app       # 等价 make app
 | `logs/` | AI Coding 协作记录 + 板上启动日志原文 |
 | `contest2026_485_xiaomingTV.xml` | 专属仓 manifest：把本仓 `app/mianyu` 链到 openvela 的 packages 下 |
 
-架构取舍的完整推导（含两个附加的接口设计、哪些已接线哪些待接线）见
+架构取舍的完整推导（含两个附加的接口设计与接线状态）见
 [`docs/以对话为核心的架构.md`](docs/以对话为核心的架构.md)。
 
 ## 真机现在什么情况

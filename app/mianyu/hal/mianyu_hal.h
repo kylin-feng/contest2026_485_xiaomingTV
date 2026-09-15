@@ -88,6 +88,41 @@ my_err_t my_hal_imu_read(float *ax, float *ay, float *az);
 /* 把亮度百分比 0..100 上屏（真机=LVGL 呼吸光晕；模拟器=日志/丢弃）。 */
 void my_hal_light_set(int level_pct);
 
+/* ============= 语音链路：判定上行 / 光引导下行 =============
+ *
+ * 位置感：这两个接口是"核心（Agent 对话）"与"两个附加"之间的接线柱。
+ *
+ *   附加 1（输入）：入睡判定 ── my_hal_sleep_report() ──▶ PC 侧 Agent
+ *      判定的产物不是给人看的报告，是给 Agent 的一个信号：
+ *      "他现在是清醒/困倦/睡着了"，Agent 据此决定要不要换策略。
+ *
+ *   附加 2（输出）：PC 侧 Agent ── my_hal_remote_cmd_take() ──▶ 光/呼吸节拍
+ *      Agent 说了算的是"光怎么带呼吸"，板子只负责把参数落地。
+ *
+ * 两侧都做成【非阻塞 + 整型参数】：真机上是跨线程（主循环 ↔ 串口线程），
+ * 模拟器上是空实现，只有 int 在两边走，不共享对象。
+ */
+
+/* 下行指令的种类。参数统一放 a/b/c/d 四个 int，够表达、又能安全跨线程传。 */
+typedef enum {
+    MY_RCMD_NONE = 0,       /* 没取到（仅内部用） */
+    MY_RCMD_SET_BREATHE,    /* 改呼吸节拍：a=吸ms b=屏ms c=呼ms d=峰值% */
+    MY_RCMD_SET_HALO,        /* 只改光晕亮度：a=亮度% */
+    MY_RCMD_LIGHT_ONOFF,     /* 开/关灯：a=0/1 */
+} my_rcmd_kind_t;
+
+typedef struct {
+    my_rcmd_kind_t kind;
+    int            a, b, c, d;
+} my_remote_cmd_t;
+
+/* 把入睡判定结果上报给 PC 侧 Agent。
+ * state: 0=清醒 1=困倦 2=已入睡；conf_pct: 置信度 0..100；resp_bpm: 呼吸率(次/分)。 */
+void my_hal_sleep_report(int state, int conf_pct, int resp_bpm);
+
+/* 取一条 PC 侧 Agent 发来的下行指令（非阻塞）。取到返回 true，无则 false。 */
+bool my_hal_remote_cmd_take(my_remote_cmd_t *out);
+
 /* ===================== 存储后端（注入给核心层） ===================== */
 
 /* 调度任务表后端：真机=cJSON+LittleFS，模拟器=内存。调用方用 my_sched_init 注入。 */

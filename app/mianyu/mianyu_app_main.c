@@ -87,6 +87,13 @@ typedef struct {
     int     last_total_min;
     int     last_onset_sec;
     int     last_wakes;
+
+    /* ---- Agent 语音链路：上行判定 / 下行光引导 ----
+     * 这两个字段只是"什么时候该发"，不参与哄睡逻辑本身：
+     * 判定状态跳变时发一次（Agent 真正需要的信号），之后每 5 分钟补一次
+     * 心跳（证明板子还活着）；下行命令由 my_hal_remote_cmd_take 拉。 */
+    int     link_last_state;     /* 上次上报过的判定状态；-1 = 还没报过 */
+    int     link_beat_tick;      /* 距上次上报的 tick 数 */
 } app_t;
 
 static void print_status(app_t *a)
@@ -287,6 +294,7 @@ int mianyu_main(int argc, FAR char *argv[])
 
     app_t a;
     memset(&a, 0, sizeof(a));
+    a.link_last_state = -1;     /* 链路：还没上报过任何判定状态 */
 
     /* 五个核心模块初始化 */
     my_sleep_init(&a.det);
@@ -341,6 +349,41 @@ int mianyu_main(int argc, FAR char *argv[])
             stop_session(&a, &a.now);
         }
 
+        /* ⓪′ 来自 PC 侧 Agent 的下行指令 —— 「附加 2：光引导」的下行端。
+         * Agent 说了算的是"光怎么带呼吸"；板子只把参数落地，节奏算法本身
+         * 仍在 mianyu_breathe.c 里（换平台不改）。多条一次取完，避免积压。 */
+        my_remote_cmd_t rcmd;
+        while (my_hal_remote_cmd_take(&rcmd)) {
+            switch (rcmd.kind) {
+            case MY_RCMD_SET_BREATHE:
+                if (rcmd.a > 0) a.breathe.cfg.inhale_ms = rcmd.a;
+                if (rcmd.b > 0) a.breathe.cfg.hold_ms   = rcmd.b;
+                if (rcmd.c > 0) a.breathe.cfg.exhale_ms = rcmd.c;
+                if (rcmd.d > 0) a.breathe.cfg.peak_pct  =
+                                    (uint8_t)(rcmd.d > 100 ? 100 : rcmd.d);
+                printf("[%02d:%02d:%02d] ← Agent 改呼吸节拍：吸 %d / 屏 %d / 呼 %d ms，峰值 %d%%\n",
+                       a.now.hour, a.now.minute, a.now.second,
+                       a.breathe.cfg.inhale_ms, a.breathe.cfg.hold_ms,
+                       a.breathe.cfg.exhale_ms, a.breathe.cfg.peak_pct);
+                my_breathe_reset(&a.breathe);   /* 新节奏立刻从吸气段起 */
+                break;
+            case MY_RCMD_SET_HALO:
+                if (rcmd.a > 0)
+                    a.breathe.cfg.peak_pct = (uint8_t)(rcmd.a > 100 ? 100 : rcmd.a);
+                printf("[%02d:%02d:%02d] ← Agent 改光晕峰值：%d%%\n",
+                       a.now.hour, a.now.minute, a.now.second, a.breathe.cfg.peak_pct);
+                break;
+            case MY_RCMD_LIGHT_ONOFF:
+                a.light_on = (rcmd.a != 0);
+                printf("[%02d:%02d:%02d] ← Agent %s灯\n",
+                       a.now.hour, a.now.minute, a.now.second,
+                       a.light_on ? "开" : "关");
+                break;
+            default:
+                break;
+            }
+        }
+
         /* 今晚的计时：界面上的「已用」和夜醒提示都靠它 */
         if (a.session_active) {
             a.session_ticks++;
@@ -375,6 +418,21 @@ int mianyu_main(int argc, FAR char *argv[])
             }
             my_fade_start_fade_out(&a.fade);
             a.light_on = false;
+        }
+
+        /* ③′ 把判定结果报给 PC 侧 Agent —— 「附加 1：入睡判定」的上行端。
+         * 判定的产物不是给人看的报告，是给 Agent 的一个信号（"他现在清醒/
+         * 困倦/睡着了"），Agent 据此决定要不要出声、要不要换策略。
+         * 状态跳变时发一次；之后每 5 分钟（3000 tick）补一次心跳 ——
+         * 一晚实测约 100 条，够证明板子还活着，又不会把链路刷满。 */
+        if ((int)st != a.link_last_state || ++a.link_beat_tick >= 3000) {
+            const my_sleep_metrics_t *mm = my_sleep_get_metrics(&a.det);
+            int conf = (int)(mm->confidence * 100.0f + 0.5f);
+            int bpm  = (int)(mm->breath_rate + 0.5f);
+
+            my_hal_sleep_report((int)st, conf, bpm);
+            a.link_last_state = (int)st;
+            a.link_beat_tick  = 0;
         }
 
         /* ④ 夜醒事件：极低音量安抚 + 微光（不亮屏、不追问） */

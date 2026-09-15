@@ -75,6 +75,21 @@
 #define VL_CMD_SET_DOWNLINK (0x06)   /* payload[1] = 0/1 下行接收开关（省电/让路） */
 #define VL_CMD_LOOPBACK     (0x07)   /* payload[1] = 0/1 声学回环（0=功放关作对照） */
 
+/* ---- 光引导（附加 2 的下行端）----
+ * PC 侧 Agent 说了算的是"光怎么带呼吸"（跟着对话内容调整节奏：说慢一点就
+ * 把呼气拉长、快睡着了就把峰值压下去）。板子只把参数落地，节奏算法本身
+ * 仍在 app/mianyu/src/mianyu_breathe.c 里，换平台不改。
+ * 时长用 2 字节小端（ms，最大 65535 够用）。 */
+#define VL_CMD_SET_BREATHE  (0x08)   /* [0x08, inhale(2), hold(2), exhale(2), peak(1)] */
+#define VL_CMD_SET_HALO     (0x09)   /* [0x09, peak%] 只改光晕峰值 */
+#define VL_CMD_LIGHT_ONOFF  (0x0A)   /* [0x0A, on] 开/关灯 */
+
+/* 下行指令种类编号 —— 必须与 app 侧 my_rcmd_kind_t 的取值一致
+ * （HAL 之间用 int 传，不做类型耦合，所以两边的数字要对得上）。 */
+#define VL_RCMD_SET_BREATHE (1)
+#define VL_RCMD_SET_HALO    (2)
+#define VL_RCMD_LIGHT_ONOFF (3)
+
 /* 板子启动后没有交互控制台（INIT_ENTRYPOINT = mianyu_main，不是 nsh_main），
  * 否则 nsh 会和语音链路抢 /dev/console，把 PC 发下来的 PCM 字节吃掉
  * —— 实测下行成功率只有 1%。但调试时还是想要个 shell，所以留这个口子：
@@ -84,6 +99,10 @@
 #define VL_EV_KEY_DOWN      (0x01)
 #define VL_EV_KEY_UP        (0x02)
 #define VL_EV_BOOT_READY    (0x03)
+/* 入睡判定状态（附加 1 的上行端）。payload = [0x04, state, conf%, bpm]
+ * state: 0=清醒 1=困倦 2=已入睡（与 app 侧 my_sleep_state_t 同值）。
+ * 这不是"给人看的报告"，是给 PC 侧 Agent 的信号：它据此决定要不要换策略。 */
+#define VL_EV_SLEEP_STATE   (0x04)
 
 #define VL_MAX_PAYLOAD      (1024)   /* 与 board_link.py 的 MAX_PAYLOAD 一致 */
 #define VL_HEAD_LEN         (5)      /* type(1)+flags(1)+seq(1)+len(2) */
@@ -111,6 +130,28 @@ static uint32_t          g_resync;          /* 重新同步次数 */
 static uint32_t          g_tx_bytes;        /* 实际写出去的字节数 */
 static uint32_t          g_tx_short;        /* 没写完整的帧数（丢帧证据） */
 static uint32_t          g_down_drop;       /* 下行因缓冲满丢弃的样本数 */
+
+/* ---------------- 跨线程的两条小路（语音链路 ↔ app 主循环） ----------------
+ *
+ * 为什么不直接调 vl_send：vl_send 组帧用的 g_tx_seq 不是原子的，写串口也
+ * 不能交错 —— 它本来是给链路线程自己"单写者"用的。入睡判定是 app 主循环
+ * 线程发起的，直连会把上行 PCM 帧切碎（PC 侧听感是咔咔响、CRC 错暴涨）。
+ *
+ * 所以两条路都是【单写单读】：
+ *   上行（判定）：app 主循环写 g_ev_* → 链路线程在自己的节拍里代发
+ *   下行（光引导）：链路线程写 g_rc_* 环形队列 → app 主循环取走
+ * 单写单读 + volatile 就够，不加锁。（读到"半新半旧"的一次状态无害：
+ * 最多多发一帧略旧的判定状态，下一拍就纠回来。）
+ */
+static volatile int      g_ev_pending;      /* 有待发的入睡状态事件 */
+static volatile uint8_t  g_ev_body[3];      /* state / conf% / bpm */
+
+#define VL_RCMD_DEPTH    (8)
+static volatile int      g_rc_kind[VL_RCMD_DEPTH];
+static volatile int      g_rc_arg[VL_RCMD_DEPTH][4];
+static volatile int      g_rc_head;         /* 链路线程写，主循环读 */
+static volatile int      g_rc_tail;         /* 主循环写，链路线程读 */
+static volatile uint32_t g_rc_lost;         /* 队列满丢弃数（诊断） */
 
 /* 64 点 Q15 正弦表（本地提示音合成用；不共用 bsp_audio_test.c 里那份，
  * 避免两个文件互相依赖） */
@@ -395,6 +436,26 @@ static void vl_hand_over_to_shell(void)
 }
 
 /* 处理一条完整的帧。payload 已通过 CRC。 */
+/* 把一条下行命令塞进给 app 主循环的环形队列。队列满就丢最旧的并计数：
+ * 光引导是"最新的一条说了算"，积压旧命令只会让光乱跳。 */
+static void vl_rcmd_push(int kind, int a, int b, int c, int d)
+{
+  int next = (g_rc_head + 1) % VL_RCMD_DEPTH;
+
+  if (next == g_rc_tail)
+    {
+      g_rc_tail = (g_rc_tail + 1) % VL_RCMD_DEPTH;
+      g_rc_lost++;
+    }
+
+  g_rc_kind[g_rc_head]    = kind;
+  g_rc_arg[g_rc_head][0]  = a;
+  g_rc_arg[g_rc_head][1]  = b;
+  g_rc_arg[g_rc_head][2]  = c;
+  g_rc_arg[g_rc_head][3]  = d;
+  g_rc_head = next;
+}
+
 static void vl_on_frame(uint8_t type, uint8_t flags, uint8_t seq,
                         const uint8_t *pl, int len)
 {
@@ -517,6 +578,40 @@ static void vl_on_frame(uint8_t type, uint8_t flags, uint8_t seq,
                             (unsigned)pk, (unsigned)rms);
                     }
                 }
+                break;
+
+              /* ---- 光引导（附加 2 的下行端）：只入队，真正的落地在
+               * app 主循环里（它才知道当前灯亮不亮、呼吸引擎在什么相位）。
+               * 链路这边不碰灯光，避免两个线程同时改一个引擎。 */
+              case VL_CMD_SET_BREATHE:
+                if (len >= 8)
+                  {
+                    int inh = (int)pl[1] | ((int)pl[2] << 8);
+                    int hld = (int)pl[3] | ((int)pl[4] << 8);
+                    int exh = (int)pl[5] | ((int)pl[6] << 8);
+                    int pk  = (int)pl[7];
+
+                    vl_rcmd_push(VL_RCMD_SET_BREATHE, inh, hld, exh, pk);
+                    vllog("CMD 呼吸节拍 -> 吸%u/屏%u/呼%u ms，峰值%u%%",
+                          (unsigned)inh, (unsigned)hld, (unsigned)exh,
+                          (unsigned)pk);
+                  }
+                break;
+
+              case VL_CMD_SET_HALO:
+                if (len >= 2)
+                  {
+                    vl_rcmd_push(VL_RCMD_SET_HALO, (int)pl[1], 0, 0, 0);
+                    vllog("CMD 光晕峰值 -> %u%%", (unsigned)pl[1]);
+                  }
+                break;
+
+              case VL_CMD_LIGHT_ONOFF:
+                if (len >= 2)
+                  {
+                    vl_rcmd_push(VL_RCMD_LIGHT_ONOFF, (int)pl[1], 0, 0, 0);
+                    vllog("CMD 灯 -> %s", pl[1] ? "开" : "关");
+                  }
                 break;
 
               case VL_CMD_SHELL:
@@ -978,6 +1073,22 @@ static void vl_thread(void)
       /* ---- 2) 上行：把这一个 tick 里攒下的整帧全部发出去 ---- */
       vl_uplink_pump(up, &up_fill, g_mic_up);
 
+      /* ---- 2′) 代发别的线程（app 主循环）托过来的事件 ----
+       * 走这里而不是让 app 直接调 vl_send：组帧（g_tx_seq）和写串口都得是
+       * 单写者，否则会和上面的 PCM 帧交错。代价是延迟上限 = 一个循环（≈16ms），
+       * 对"入睡状态"这种秒级的信号完全无所谓。 */
+      if (g_ev_pending)
+        {
+          uint8_t ev[4];
+
+          ev[0] = VL_EV_SLEEP_STATE;
+          ev[1] = g_ev_body[0];
+          ev[2] = g_ev_body[1];
+          ev[3] = g_ev_body[2];
+          g_ev_pending = 0;
+          vl_send(VL_T_EVENT, ev, 4, 0);
+        }
+
       /* ---- 3) 周期性状态（500ms 一次）：采到的量 + 链路健康度 ---- */
       {
         uint32_t now = (uint32_t)clock_systime_ticks();
@@ -1010,6 +1121,51 @@ static void vl_thread(void)
        * 表达意图即可（别指望亚 tick 的精度，见 bsp_audio_test.c 的说明）。 */
       usleep(1000);
     }
+}
+
+/* ------------------------------------------------------------------------- */
+/* 给 app 主循环的两根线（附加 1 上行 / 附加 2 下行）                          */
+/* ------------------------------------------------------------------------- */
+
+/* app 主循环 → 链路线程：把入睡判定状态托出去。
+ * 非阻塞，随时可调（主循环每 100ms 一拍）。返回 0=已入队，-1=链路还没起来。
+ * 注意"已入队"不等于"已经发出去"：真正写串口在链路线程的下一拍。 */
+int bsp_voice_link_send_sleep_state(int state, int conf_pct, int resp_bpm)
+{
+  if (g_fd < 0)
+    {
+      return -1;
+    }
+
+  g_ev_body[0] = (uint8_t)(state < 0 ? 0 : (state > 2 ? 2 : state));
+  g_ev_body[1] = (uint8_t)(conf_pct < 0 ? 0 : (conf_pct > 100 ? 100 : conf_pct));
+  g_ev_body[2] = (uint8_t)(resp_bpm < 0 ? 0 : (resp_bpm > 255 ? 255 : resp_bpm));
+  g_ev_pending = 1;
+  return 0;
+}
+
+/* 链路线程 → app 主循环：取一条 PC 侧 Agent 发来的下行指令（非阻塞）。
+ * 取到返回 0（kind/a/b/c/d 填好），没有命令返回 -1。 */
+int bsp_voice_link_take_remote_cmd(int *kind, int *a, int *b, int *c, int *d)
+{
+  if (kind == NULL || a == NULL || b == NULL || c == NULL || d == NULL)
+    {
+      return -1;
+    }
+
+  if (g_rc_tail == g_rc_head)
+    {
+      return -1;
+    }
+
+  *kind = g_rc_kind[g_rc_tail];
+  *a    = g_rc_arg[g_rc_tail][0];
+  *b    = g_rc_arg[g_rc_tail][1];
+  *c    = g_rc_arg[g_rc_tail][2];
+  *d    = g_rc_arg[g_rc_tail][3];
+
+  g_rc_tail = (g_rc_tail + 1) % VL_RCMD_DEPTH;
+  return 0;
 }
 
 int bsp_voice_link_start(void)

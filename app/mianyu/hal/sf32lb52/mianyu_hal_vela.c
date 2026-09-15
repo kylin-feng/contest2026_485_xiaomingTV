@@ -316,6 +316,43 @@ void my_hal_light_set(int level_pct)
     s_ui.light_pct = level_pct < 0 ? 0 : (level_pct > 100 ? 100 : level_pct);
 }
 
+/* ===================== 语音链路：判定上行 / 光引导下行 =====================
+ *
+ * 真机这一侧要跨到板级去：语音链路（board/bsp_voice_link.c）是唯一持有
+ * /dev/console 的线程，判定结果要报给 PC、PC 的命令要收下来，都得经过它。
+ *
+ * 这里用 extern 声明而不是 #include 板级头文件：app 编译在 openvela 的
+ * packages/ 下，板级头在 vendor/ 下，两边不该有编译期依赖。符号对不上时
+ * 链接器会直接报错，不会静默退化成"看起来接了线其实没接"。
+ *
+ * ⚠ 两侧的 kind 编号必须一致（board/bsp_voice_link.c 里的 VL_RCMD_*）：
+ *     1=SET_BREATHE  2=SET_HALO  3=LIGHT_ONOFF
+ */
+extern int bsp_voice_link_send_sleep_state(int state, int conf_pct, int resp_bpm);
+extern int bsp_voice_link_take_remote_cmd(int *kind, int *a, int *b, int *c, int *d);
+
+void my_hal_sleep_report(int state, int conf_pct, int resp_bpm)
+{
+    /* 上行丢了不影响哄睡（判定结果只是给 Agent 的信号），所以这里
+     * 刻意不把失败往上抛：串口写不进去时板级自己会记 g_tx_short。 */
+    (void)bsp_voice_link_send_sleep_state(state, conf_pct, resp_bpm);
+}
+
+bool my_hal_remote_cmd_take(my_remote_cmd_t *out)
+{
+    int kind = 0, a = 0, b = 0, c = 0, d = 0;
+
+    if (out == NULL) return false;
+    if (bsp_voice_link_take_remote_cmd(&kind, &a, &b, &c, &d) != 0) return false;
+
+    out->kind = (my_rcmd_kind_t)kind;
+    out->a = a;
+    out->b = b;
+    out->c = c;
+    out->d = d;
+    return true;
+}
+
 /* ===================== 手表界面 =====================
  *
  * 两个线程的分工，说清楚免得后面有人乱改：
