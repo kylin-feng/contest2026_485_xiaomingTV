@@ -1,4 +1,4 @@
-# 眠语 · 核心算法层构建（PC 端单元测试，无需任何硬件/RTOS）
+# 安眠科技 · 核心算法层构建（PC 端单元测试，无需任何硬件/RTOS）
 #
 # 这一层是【平台无关纯 C】：不含任何 openvela/NuttX/SDK 头文件，
 # 只依赖 <math.h>/<string.h>/<stdint.h>。因此可以在任意 PC（Linux/macOS）上
@@ -48,7 +48,7 @@ $(BUILD)/night_demo: demo/night_demo.c $(SRCS) | $(BUILD)
 
 demo: $(BUILD)/night_demo
 	@echo "=================================================="
-	@echo " 眠语 · 整晚闭环演示"
+	@echo " 安眠科技 · 整晚闭环演示"
 	@echo "=================================================="
 	@$(BUILD)/night_demo
 
@@ -92,7 +92,7 @@ SHELL     := /bin/sh
 
 test: $(TESTS)
 	@echo "=================================================="
-	@echo " 眠语 · 核心算法层单元测试"
+	@echo " 安眠科技 · 核心算法层单元测试"
 	@echo "=================================================="
 	@pass=0; fail=0; lim=$$(( $(TIMEOUT_S) * 10 )); \
 	for t in $(MODULES); do \

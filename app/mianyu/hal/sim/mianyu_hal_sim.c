@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · HAL 后端：PC 模拟器（无硬件）
+ * 安眠科技 · HAL 后端：PC 模拟器（无硬件）
  *
  * 把「真机主循环」搬到 PC 上跑：用虚拟时钟 + 合成呼吸信号 + 内存存储，
  * 让 app/mianyu/mianyu_app_main.c 在没有任何硬件/RKOS 的普通电脑上也能

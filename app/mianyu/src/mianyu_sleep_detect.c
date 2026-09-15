@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 双模态入睡判定实现
+ * 安眠科技 · 入睡判定实现（MIC 为主判据，IMU 可选增强）
  * 算法说明见 mianyu_sleep_detect.h。
  *
  * 计算量核算（对位技术报告 3.3 "算力占用"）：

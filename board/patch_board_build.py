@@ -20,7 +20,7 @@ STAMP = time.strftime("%Y%m%d_%H%M%S")
 #   1) configs/nsh/defconfig            —— 配置源头（下次 configure 用）
 #   2) cmake_out/<board>/.config        —— 当前构建的配置
 #   3) cmake_out/<board>/include/nuttx/config.h —— 编译器真正读的头文件
-#      ⚠️ 改 defconfig 对 ninja 增量**无效**，config.h 只在 cmake configure 时
+#      注意：改 defconfig 对 ninja 增量**无效**，config.h 只在 cmake configure 时
 #      重生成，所以必须直接改 config.h 才能让 nx_bringup.c 用新符号重编。
 ENTRY_OLD = "nsh_main"
 ENTRY_NEW = "mianyu_main"

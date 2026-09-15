@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 噪声合成单元测试（PC 端，无需任何硬件/RTOS）
+ * 安眠科技 · 噪声合成单元测试（PC 端，无需任何硬件/RTOS）
  *
  * 这组测试同时服务技术报告 3.5 节——它证明了"端侧实时合成音频"
  * 不是纸上谈兵：频谱特性、幅度稳定性、无溢出、可复现性都有量化数据。
@@ -159,7 +159,7 @@ static void test_level_and_edge(void)
 
 int main(void)
 {
-    printf("=== 眠语 · 噪声合成单元测试 ===\n");
+    printf("=== 安眠科技 · 噪声合成单元测试 ===\n");
     test_kind("白噪 WHITE", MY_NOISE_WHITE, 0x1234ABCD);
     test_kind("粉噪 PINK",  MY_NOISE_PINK,  0xDEADBEEF);
     test_kind("棕噪 BROWN", MY_NOISE_BROWN, 0x5150AA55);

@@ -1044,7 +1044,7 @@ int bsp_voice_link_start(void)
  * vl_hand_over_to_shell）。这个取舍是有意的：交还之后下行就不能用了。
  *
  * ---------------------------------------------------------------------------
- * ⚠️ 这里曾经定义 `int mianyu_main(...)` 来"占住 init 线程"。那是错的：
+ * 注意：这里曾经定义 `int mianyu_main(...)` 来"占住 init 线程"。那是错的：
  * 它与哄睡 app（app/mianyu/mianyu_app_main.c）的 `mianyu_main` **同名**，
  * 链接器在解析 init 入口时先撞上板级这个目标文件，于是 app 的
  * mianyu_app_main.o 整个没被拉进固件 —— 编译日志一切正常、固件里却没有

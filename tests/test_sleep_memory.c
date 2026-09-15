@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 睡眠记忆持久化单元测试（PC 端）
+ * 安眠科技 · 睡眠记忆持久化单元测试（PC 端）
  *
  * 测试重点：
  *   1. add：同晚去重更新、未满追加、满后覆盖最旧（按 date_key）
@@ -556,7 +556,7 @@ static void test_sizes(void)
 int main(void)
 {
     printf("============================================\n");
-    printf(" 眠语 · 睡眠记忆持久化单元测试\n");
+    printf(" 安眠科技 · 睡眠记忆持久化单元测试\n");
     printf(" 保留 %d 晚 / 记录 %.0f 字节 / 档案 %.0f 字节\n",
            MY_MEM_MAX_DAYS, (double)sizeof(my_sleep_record_t), (double)sizeof(my_sleep_memory_t));
     printf("============================================\n");

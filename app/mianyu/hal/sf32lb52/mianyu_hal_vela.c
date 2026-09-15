@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · HAL 后端：openvela / NuttX 真机（SF32LB52-DevKit-LCD）
+ * 安眠科技 · HAL 后端：openvela / NuttX 真机（SF32LB52-DevKit-LCD）
  *
  * 这是上真机时链接的 backend，实现 hal/mianyu_hal.h 的同一套 my_hal_* 符号。
  * 与 hal/sim 的区别只是「平台能力从哪来」：
