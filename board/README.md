@@ -13,6 +13,9 @@
 | `bsp_voice_link.c` | 串口语音链路：UART1(`/dev/console`) 独占、帧协议 `A5 5A + CRC16-CCITT-FALSE`、开机协议自检、上行 MIC / 下行 PCM / 事件 / 命令分发 |
 | `patch_board_build.py` | **在 openvela 工程里做幂等接入**：把两个 .c 加进板级 CMakeLists 的 SRCS、在 `sifli_ap.c` 的 `board_late_initialize()` 里调 `bsp_voice_link_start()`、把 `CONFIG_INIT_ENTRYPOINT` 从 `nsh_main` 改成 `mianyu_main`（三处配置同时改，见下） |
 | `push_to_buildhost.py` | 把上面两个 .c 用 base64 推到编译主机并执行 `patch_board_build.py` |
+| `sf32lb_lcd.c` | **板级 LCD 驱动（本队改动版）**。落地在 `vendor/sifli/boards/sf32lb52/drivers/lcd/`。三处关键改动：① `lcddev_register()` 前置到面板就绪之后、bring-up 测试之前（顺序错了界面线程会等不到 `/dev/lcd0` 直接退出，见 `../docs/真机显示与触摸定性_20260915.md`）；② `sf32lb_lcd_wrram()` 加 `s_wr_lock` 串行化，并带 putarea/drop/wrram/done/timeout 计数与 5s 心跳；③ bring-up 全屏纯色测试由 `CONFIG_MIANYU_LCD_BRINGUP_VISUAL` 控制，默认关 |
+| `bsp_lcd_tp.c` | 板级触摸电源域：`BSP_TP_PowerUp` 里带 I2C1 空闲电平电气检测（临时把 PA30/PA33 改成 input+pullup 读电平，1/1 才算总线正常） |
+| `co5300.c` / `ft6146.c` | co5300 面板与 ft6146 触摸驱动（含 `[co5300][readback]` 自检与 `[ft6146][diag]` 诊断打点）。这两个是**审计用的只读副本**，未改逻辑 |
 
 ## 硬件通路（调试地图）
 

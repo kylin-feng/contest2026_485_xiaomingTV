@@ -1,0 +1,54 @@
+# v43 真机启动日志（关键行；全量 2700684 字节见桌面 cap_v43.log）
+# 固件 nuttx_v43.bin  1677420 字节  md5 8db381c7dc69c8b604e9e3ca24683042
+# 结论：putarea=141 wrram=383 done=383 timeout=0（done==wrram、零超时）；
+#       首帧即整屏 rows=0..71；触摸已挂 indev!=0；IMU 未应答(I2C1 -5)。
+# 详见 docs/真机显示与触摸定性_20260915.md
+WARN: LSM6DS3 not found at 0x6a on I2C1: -5
+ERROR: LSM6DS3 register failed on I2C1: -5
+ERROR: sf32lb52_lsm6ds3_initialize failed: -5
+[co5300][diag] VADD_EN (PA37) driven HIGH
+[mianyu] LVGL 线程已起 pid=9
+[co5300][selftest] brightness set to 0xff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,255,255) 565=0xffff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,0,0) 565=0xf800
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,255,0) 565=0x07e0
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,0,255) 565=0x001f
+[mianyu] 仍在等 /dev/lcd0（板级 LCD 尚未注册完）
+[co5300][cmdtest] done
+[co5300][selftest] GRAM fill RGB(255,255,255)
+[co5300][selftest] GRAM fill RGB(255,0,0)
+[co5300][selftest] GRAM fill RGB(0,255,0)
+[co5300][selftest] GRAM fill RGB(0,0,255)
+[co5300][probe] ID len1=0x00000033 len2=0x00003311 len3=0x00331100 len4=0x33110000
+[co5300][probe] 0x0A=0x0000009c 0x0B=0x00000000 0x0C=0x00000055 0x0D=0x00000008
+[co5300][probe] 0x0E=0x00000000 0x0F=0x000000c0 0x3A=0x00000055 0x52=0x000000ff
+[co5300][probe] after magenta fill: GRAM len4=0x7f00007f len2=0x00007f00 | ID(again) len3=0x00331100
+[co5300][readback] GRAM(0x2E)=7f 00 00 7f -> NO MATCH -> pixel data is not landing (QSPI write/mode)
+[co5300][selftest] both tests done
+[lcd][diag] panel ready before lcddev_register
+[lcd][diag] /dev/lcd0 registered (took 0 retries)
+[lcd][diag] hw thread: panel already inited, skip duplicate Init
+[watch_ui] 界面就绪：表盘页 + 哄睡页，10Hz 刷新
+[lcd][pa] first putarea rows=0..71 cols=0..389 bpp=16 stride=780
+[lcd][wr] first write region=[0,0,389,23] bytes=18720 bpp=16
+[mianyu] 触摸已补挂 indev=0x20041600
+[mianyu][ui] 强制整屏重绘 #2
+[ft6146][diag] touch_register ret=0
+[tp][diag] idle I2C1 level SCL(PA30)=1 SDA(PA33)=1 (expect 1/1; 0 => bus stuck or panel absent)
+[tp][diag] BSP_TP_PowerUp done: CTP_RESET(PA09)=1
+[ft6146][diag] irq_pin=31 addr=0x38 freq=400000
+[lcd][hb] t=5s putarea=28(+28) drop=1 wrram=76(+76) done=76(+76) timeout=0(+0) kb=1348 last=390x18
+[mianyu][ui] 存活 loop=34 idle=31 tick=28395 整屏重绘=6
+[lcd][hb] t=10s putarea=63(+35) drop=1 wrram=171(+95) done=171(+95) timeout=0(+0) kb=3033 last=390x18
+[mianyu][ui] 强制整屏重绘 #20
+[lcd][hb] t=25s putarea=140(+9) drop=1 wrram=380(+23) done=380(+23) timeout=0(+0) kb=6740 last=390x18
+[lcd][hb] t=30s putarea=140(+0) drop=1 wrram=380(+0) done=380(+0) timeout=0(+0) kb=6740 last=390x18
+[lcd][hb] t=35s putarea=140(+0) drop=1 wrram=380(+0) done=380(+0) timeout=0(+0) kb=6740 last=390x18
+[mianyu][ui] 存活 loop=429 idle=32 tick=58593 整屏重绘=20
+[mianyu][ui] 存活 loop=524 idle=32 tick=63639 整屏重绘=20
+[lcd][hb] t=45s putarea=140(+0) drop=1 wrram=380(+0) done=380(+0) timeout=0(+0) kb=6740 last=390x18
+[mianyu][ui] 存活 loop=620 idle=31 tick=68702 整屏重绘=20
+[lcd][hb] t=50s putarea=141(+1) drop=1 wrram=383(+3) done=383(+3) timeout=0(+0) kb=6748 last=100x4
+[lcd][hb] t=55s putarea=141(+0) drop=1 wrram=383(+0) done=383(+0) timeout=0(+0) kb=6748 last=100x4
+[mianyu][ui] 存活 loop=1018 idle=33 tick=88802 整屏重绘=20
+[lcd][hb] t=75s putarea=141(+0) drop=1 wrram=383(+0) done=383(+0) timeout=0(+0) kb=6748 last=100x4

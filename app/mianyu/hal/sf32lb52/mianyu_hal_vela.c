@@ -402,13 +402,34 @@ static void mianyu_lvgl_thread(int argc, FAR char *argv[])
     lv_nuttx_result_t res;
     lv_indev_t       *indev = NULL;
     uint32_t          last_probe = 0;
+    uint32_t          t_disp = 0;      /* /dev/lcd0 打开的时刻 */
+    uint32_t          t_full = 0;      /* 上次强制整屏重绘 */
+    uint32_t          t_log = 0;
+    unsigned          n_full = 0;
+    unsigned          n_loop = 0;
 
     (void)argc; (void)argv;
 
-    if (!my_wait_dev("/dev/lcd0", 20000)) {
-        syslog(LOG_ERR, "[mianyu] 等 /dev/lcd0 超时，界面不启动\n");
-        return;
+    /* ---- 等 /dev/lcd0：不许放弃 ----
+     *
+     * 板级 LCD 起得比这条线程慢得多。co5300 那一长串初始化命令 + 面板自检
+     * 实测要十几秒，然后才是 lcddev_register 重试。v41 真机日志：
+     *
+     *   [mianyu] LVGL 线程已起 pid=9
+     *   [lcd][itvis] start / white pushed / blue pushed ...
+     *   [mianyu] 等 /dev/lcd0 超时，界面不启动     <-- 20 秒窗口被撑爆
+     *
+     * 原来写的是 my_wait_dev(..., 20000)，等不到就 return —— 界面从此永远
+     * 不会起来，屏幕自然一直是黑的。这是「真机界面跑不通」的最后一道门。
+     * 现在改成一直等：每 5 秒探一轮，等不到只打一行日志，绝不退出。 */
+    for (;;) {
+        if (my_wait_dev("/dev/lcd0", 5000)) {
+            break;
+        }
+        syslog(LOG_ERR, "[mianyu] 仍在等 /dev/lcd0（板级 LCD 尚未注册完）\n");
     }
+
+    syslog(LOG_ERR, "[mianyu] /dev/lcd0 已就绪，开始初始化 LVGL\n");
 
     lv_init();
 
@@ -426,6 +447,7 @@ static void mianyu_lvgl_thread(int argc, FAR char *argv[])
     }
 
     watch_ui_start();                /* 表盘页 + 哄睡页，开 100ms 刷新定时器 */
+    t_disp = lv_tick_get();
 
     /* ---- 换成局部刷新缓冲 ----
      * lv_nuttx 默认给的是【整屏缓冲 + LV_DISPLAY_RENDER_MODE_FULL】（它按
@@ -476,7 +498,51 @@ static void mianyu_lvgl_thread(int argc, FAR char *argv[])
             }
         }
 
+        /* ---- 开机前 20 秒：反复强制整屏重绘 ----
+         *
+         * 板级 LCD 的注册时机比面板就绪早：/dev/lcd0 是 lcd_init_thread_entry
+         * 注册的，而 s_lcd_hw_ready 要等另一条 hw 线程把 IRQ / 图层配完。这中间
+         * 好几秒里 sf32lb_lcd_putarea() 会静默 return OK —— 看上去刷成功了，其实
+         * 一个像素都没发出去。
+         *
+         * 后果很隐蔽：LVGL 认为首帧已经画完，屏幕从此"干净"，之后只重画真正
+         * 变化的脏区。实测 v39 真机：开机 90 秒只推了 1 次 putarea（100×52 的
+         * 时间标签），其余整屏从来没被画过 —— 屏幕上就一直是残影。
+         *
+         * 这里在开机窗口内每秒叫一次整屏无效化，代价是几十次完整渲染，换来的是
+         * 「面板一就绪必然收到一次完整重绘」，不依赖板级什么时候置位那个标志。
+         * 顺带把次数打进日志，屏幕上有没有东西就有串口证据可对。
+         */
+        if ((uint32_t)(lv_tick_get() - t_disp) < 20000) {
+            if ((uint32_t)(lv_tick_get() - t_full) >= 1000) {
+                t_full = lv_tick_get();
+                n_full++;
+                lv_obj_invalidate(lv_screen_active());
+                if (n_full <= 3 || (n_full % 10) == 0) {
+                    syslog(LOG_ERR, "[mianyu][ui] 强制整屏重绘 #%u\n", n_full);
+                }
+            }
+        }
+
         idle = lv_timer_handler();
+        n_loop++;
+
+        {
+            uint32_t now = lv_tick_get();
+            if ((uint32_t)(now - t_log) >= 5000) {
+                t_log = now;
+                syslog(LOG_ERR,
+                       "[mianyu][ui] 存活 loop=%u idle=%u tick=%u 整屏重绘=%u\n",
+                       n_loop, (unsigned)idle, (unsigned)now, n_full);
+            }
+        }
+
+        /* lv_timer_handler() 在没有定时器可跑时返回 LV_NO_TIMER_READY(=UINT32_MAX)，
+         * 乘 1000 之后再喂给 usleep 会回绕成 ~4295 秒 —— 这条线程会一觉睡掉
+         * 七十多分钟，界面与触摸一起假死。钳一下上限，顺手消掉这个隐患。 */
+        if (idle > 100) {
+            idle = 100;
+        }
 
         usleep((idle ? idle : 1) * 1000);   /* 至少睡 1ms，别空转烧 CPU */
     }

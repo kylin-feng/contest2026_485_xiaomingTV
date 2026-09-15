@@ -326,7 +326,9 @@ bool my_hal_ui_take_stop_request(void)
  * 模拟器上没有串口链路，所以：
  *   · 上行只打一行日志 —— 作用是对着 `make app` 的输出核对"判定结果
  *     是何时报出去的"（真机上这一行对应的是一个 EVENT 帧）。
- *   · 下行恒返回 false —— 模拟器上没人给板子发命令。真机那条路见
+ *   · 下行按虚拟时钟放一段脚本 —— 模拟器上没有人给板子发命令，但"Agent
+ *     下发光引导参数 → 板子落地 → 灯真的变了"这条闭环必须能演示。
+ *     脚本时刻是相对 22:05:00（模拟起点）的偏移，真机那条路见
  *     hal/sf32lb52/mianyu_hal_vela.c 与 board/bsp_voice_link.c。
  */
 void my_hal_sleep_report(int state, int conf_pct, int resp_bpm)
@@ -343,6 +345,33 @@ void my_hal_sleep_report(int state, int conf_pct, int resp_bpm)
 
 bool my_hal_remote_cmd_take(my_remote_cmd_t *out)
 {
-    (void)out;
+    /* 脚本：虚拟时刻（自 22:05:00 起的毫秒）→ 一条下行命令。
+     * 参数语义与真机帧一致：SET_BREATHE{a=吸,b=屏,c=呼(ms),d=峰值%}、
+     * SET_HALO{a=峰值%}、LIGHT_ONOFF{a=1 开 / 0 关}。 */
+    static const struct { int64_t at_ms; my_remote_cmd_t cmd; } k_script[] =
+    {
+        /* 22:12 会话开始 7 分钟后：把节奏从默认放缓到 4s-2s-6s */
+        {   7 * 60 * 1000LL, { MY_RCMD_SET_BREATHE, 4000, 2000, 6000, 35 } },
+        /* 22:20 光晕峰值抬到 60%：引导要加强 */
+        {  15 * 60 * 1000LL, { MY_RCMD_SET_HALO,       60,    0,    0,  0 } },
+        /* 22:40 Agent 判断需要更明显的光，开灯 */
+        {  35 * 60 * 1000LL, { MY_RCMD_LIGHT_ONOFF,     1,    0,    0,  0 } },
+        /* 23:10 人已经睡着，光晕收到 25% */
+        {  65 * 60 * 1000LL, { MY_RCMD_SET_HALO,       25,    0,    0,  0 } },
+        /* 06:30 晨间，收灯 */
+        { 505 * 60 * 1000LL, { MY_RCMD_LIGHT_ONOFF,     0,    0,    0,  0 } },
+    };
+    static int s_next;
+
+    if (out == NULL) return false;
+
+    if (s_next < (int)(sizeof(k_script) / sizeof(k_script[0]))
+        && s_clock_ms >= k_script[s_next].at_ms)
+    {
+        *out = k_script[s_next].cmd;
+        s_next++;
+        return true;
+    }
+
     return false;
 }

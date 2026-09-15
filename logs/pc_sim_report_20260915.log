@@ -1,0 +1,35 @@
+==================================================
+ 安眠科技 · 核心算法层单元测试
+==================================================
+
+>>> noise_gen
+    MY_RESULT: pass=31 fail=0
+
+>>> sleep_detect
+    MY_RESULT: pass=52 fail=0
+
+>>> fade
+    MY_RESULT: pass=101 fail=0
+
+>>> schedule
+    MY_RESULT: pass=126 fail=0
+
+>>> sleep_memory
+    MY_RESULT: pass=114 fail=0
+
+>>> breathe
+    MY_RESULT: pass=41 fail=0
+
+==================================================
+ 套件： 6 通过 / 0 失败
+==================================================
+
+断言统计（逐套件，取自各程序的 MY_RESULT 权威行）：
+  noise_gen       31 PASS /   0 FAIL
+  sleep_detect    52 PASS /   0 FAIL
+  fade           101 PASS /   0 FAIL
+  schedule       126 PASS /   0 FAIL
+  sleep_memory   114 PASS /   0 FAIL
+  breathe         41 PASS /   0 FAIL
+  ------------------------------
+  合计             465 PASS /   0 FAIL
