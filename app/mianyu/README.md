@@ -1,13 +1,18 @@
 # 眠语（mianyu）— openvela 应用
 
-> 主动式哄睡智能体 · openvela AI 硬件开发者大赛 2026 · 队伍 485 · 小鸣TV
+> 会聊天的哄睡设备 · openvela AI 硬件开发者大赛 2026 · 队伍 485 · 小鸣TV
 
-`app/mianyu/` 是作品在 openvela / NuttX 上的应用入口和平台无关核心层。
+`app/mianyu/` 是作品在 openvela / NuttX 上的应用入口和平台无关算法层。
+
+**核心是 Agent 语音对话**（见仓根 `skills/` 三个 Skill），本包负责它的两端：
+入睡判定（附加 1，给 Agent 输入）与呼吸光引导（附加 2，做输出通道）。
+定位推导见 [`../../docs/以对话为核心的架构.md`](../../docs/以对话为核心的架构.md)。
 
 ## 模块组成
 
 - `mianyu_app_main.c` — 真机主循环（入口 `mianyu_main`）
-- `src/` — 平台无关核心层 7 模块：调度 / 噪声 / 入睡判定 / 淡出 / 记忆 / 时间 / 呼吸
+- `src/` — 平台无关算法层 7 模块：调度 / 噪声 / 入睡判定 / 淡出 / 记忆 / 时间 / 呼吸
+  （其中 **入睡判定 = 附加 1**、**呼吸 = 附加 2**）
 - `hal/sim/` — PC 模拟后端（`make app` 跑这层）
 - `ui/` — LVGL 呼吸动画渲染（真机 `make menuconfig` 启 LVGL 时启用）
 
