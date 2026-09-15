@@ -1,0 +1,121 @@
+== 烧录尝试 1/8 ==
+0%
+100%
+0%
+100%
+0%
+100%
+== 烧录完成，立刻抓 60 秒 ==
+原始 8028 字节, 文本行 111
+---- 全文 ----
+SFBL
+ABCD[0m[33mADC calibration data missing, use defaults
+[0m[0mADC calibration ratio=1068 offset=822
+[0m[0mADC /dev/adc0 init done, ret=0
+[0m[0m[33mWARN: LSM6DS3 not found at 0x6a on I2C1: -5
+[0m[0m[31mERROR: LSM6DS3 register failed on I2C1: -5
+[0m[0m[31mERROR: sf32lb52_lsm6ds3_initialize failed: -5
+[0m[0m[33mWARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+[0m[0mINFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[0m[0m[audio] audio_test 任务已启动 (pid=5)
+[0m[0m[audio] === 板载音频通路初始化（放音 + 采集）===
+[0m[0m[audio] 音频时钟已使能（HXT BUF_AUD + AUDCODEC 门控）
+[0m[0m[audio] PLL/数字块使能位已置（EN_DIG/SDM/CLK_DIG + 模拟偏置，未做锁频校准）
+[0m[0m[audio] REFGEN 使能（模拟参考源）
+[0m[0m[audio] HAL_AUDCODEC_Init -> 0
+[0m[0m[audio] Config_TChanel -> 0
+[0m[0m[audio] Config_RChanel -> 0
+[0m[0m[audio] 采集增益设为 +24 dB -> 0
+[0m[0m[audio] Transmit_DMA（6400 字节 / 2x1600 采样，循环）-> 0
+[0m[0m[audio] 放音 DMA 实际分配到通道 1（请求号 41），IRQ 66
+[0m[0m[audio] 放音 DMA TX irq 66 已挂载
+[0m[0m[audio] Config_Analog_DACPath -> 0
+[0m[0m[31m[co5300][diag] VADD_EN (PA37) driven HIGH
+[0m[0m[31m[bl][diag] backlight ON  (PA01=1) #1/3
+[0m[0m[audio] PA10 使能（功放 NS4150B）
+[0m[0m[audio] Receive_DMA（4096 字节 / 2048 采样，循环）-> 0
+[0m[0m[audio] 录音 DMA 实际分配到通道 4（请求号 39），IRQ 69
+[0m[0m[audio] 录音 DMA RX irq 69 已挂载（仅计数）
+[0m[0m[audio] Config_Analog_ADCPath 完成（MICBIAS + ADC1/ADC2 加电）
+[0m[0m[audio] ADC 总开关已开
+[0m[0m[audio] 放音：DAC 通路已起（DMA 循环放静音，等下行 PCM）
+[0m[0m[audio] 采集：ADC 通路已起（2048 采样环形 = 128 ms，16000 Hz）
+[0m[0m[audio] [init] ID=c0dec000 CFG=0000001b PLL_STAT=00000004
+[0m[0m[audio] [init] BG_CFG0=00001931 REFGEN_CFG=00000005 DAC_CFG=00000114
+[0m[0m[audio] [init] DAC_CH0_CFG=029b0689 DAC1_CFG=01f78001
+[0m[0m[audio] [init] ADC_CFG=00000a09 ADC_CH0_CFG=00010e9d ADC_ANA_CFG=0000002e
+[0m[0m[audio] [init] ADC1_CFG1=01125ab3 ADC1_CFG2=0000000e PLL_CFG6=00deb5c0
+[0m[0m[audio] [init] PLL_CFG0=5bd4ba00 CFG1=00003313 CFG2=00022f80 CFG3=78400000 CFG4=00890972 CFG5=1152d2d2
+[0m[0m[audio] [init] 关键位: EN_DIG(CFG2.b13)=1 EN_SDM(CFG3.b30)=1 EN_CLK_DIG(CFG4.b23)=1 EN_ANA(CFG0.b15)=1 | ADC_ENABLE(CFG.b0)=1 DAC_ENABLE(CFG.b1)=1 ADC_CH0_EN(b0)=1 ADC_CH0_DMA_EN(b
+[0m[0m[audio] [init] TX: ISR=00000000 CNDTR1=678 CCR1=00002abf CSELR1=27000029
+[0m[0m[audio] [init] RX: CNDTR4=723 CCR4=00002aaf CPAR4=50088040 req4=39(CSELR1.b24)
+[0m[0m[audio] [init] NVIC hwirq50 en=1 pend=0 (放音 NuttX irq66)
+[0m[0m[audio] [init] 计数 TX HT=3 TC=2 TE=0 | RX HT=0 TC=0
+[0m[0m[audio] 音频通路就绪，交给串口语音链路
+[0m[0m[31m[mianyu] LVGL 线程已起 pid=8
+[0m==============================================================
+安眠科技 · 主动式哄睡智能体 —— 主循环（HAL 接入版）
+无任何用户指令，全靠 cron + 传感器事件驱动一整晚
+==============================================================
+[01:17:07] 设备就绪，等待睡前时刻
+[0m[31m[bl][diag] backlight OFF (PA01=0) #1/3
+[0m[0m[31m[bl][diag] backlight ON  (PA01=1) #2/3
+[0m[0m[31m[bl][diag] backlight OFF (PA01=0) #2/3
+[0m[0m[31m[bl][diag] backlight ON  (PA01=1) #3/3
+[0m[0m[31m[bl][diag] backlight OFF (PA01=0) #3/3
+[0m[0m[31m[bl][diag] backlight left ON (PA01=1)
+[0m[0m[31m[co5300][diag] panel ReadID=0x331100 expected 0x331100 (match)
+[0m[0m[31m[co5300][diag] init done: DISPLAY_ON issued
+[0m[0m[31m[co5300][selftest] brightness set to 0xff
+[0m[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(255,255,255) 565=0xffff
+[0m[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(255,0,0) 565=0xf800
+[0m[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(0,255,0) 565=0x07e0
+[0m[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(0,0,255) 565=0x001f
+[0m  01:17:13  [清醒] 规律度=0.00 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+[0m[31m[co5300][cmdtest] done
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(255,255,255)
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(255,0,0)
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(0,255,0)
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(0,0,255)
+[0m[0m[31m[co5300][probe] ID len1=0x00000033 len2=0x00003311 len3=0x00331100 len4=0x33110000
+[0m[0m[31m[co5300][probe] 0x0A=0x0000009c 0x0B=0x00000000 0x0C=0x00000055 0x0D=0x00000008
+[0m[0m[31m[co5300][probe] 0x0E=0x00000000 0x0F=0x000000c0 0x3A=0x00000055 0x52=0x000000ff
+[0m[0m[31m[co5300][probe] after magenta fill: GRAM len4=0x7f00007f len2=0x00007f00 | ID(again) len3=0x00331100
+[0m[0m[31m[co5300][readback] GRAM(0x2E)=7f 00 00 7f -> NO MATCH -> pixel data is not landing (QSPI write/mode)
+[0m[0m[31m[co5300][selftest] both tests done
+[0m[0m[31mERROR: lcd_visual task_create failed: 0
+[0m[0m[31;1m[LVGL] [User]	(15.247, +15247)	 check_stack_size: tid: 8, Stack size : 49048 lv_nuttx_entry.c:283
+[0m[0m[31;1m[LVGL] [User]	(15.262, +15)	 lv_nuttx_lcd_create: lcd /dev/lcd0 opening lv_nuttx_lcd.c:77
+[0m[0m[31;1m[LVGL] [User]	(15.265, +3)	 lv_nuttx_lcd_create: lcd /dev/lcd0 open success lv_nuttx_lcd.c:84
+[0m[0m[31m[co5300][diag] panel ReadID=0x331100 expected 0x331100 (match)
+[0m[0m[31m[co5300][diag] init done: DISPLAY_ON issued
+[0m[0m[31m[co5300][selftest] brightness set to 0xff
+[0m[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(255,255,255) 565=0xffff
+[0m[0m[31m[watch_ui] 界面就绪：表盘页 + 哄睡页，10Hz 刷新
+[0m[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(255,0,0) 565=0xf800
+[0m[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(0,255,0) 565=0x07e0
+[0m  01:17:19  [清醒] 规律度=0.00 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+[0m[31m[co5300][cmdtest] ALL_PIXEL_ON RGB(0,0,255) 565=0x001f
+[0m[0m[31m[co5300][cmdtest] done
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(255,255,255)
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(255,0,0)
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(0,255,0)
+[0m[0m[31m[co5300][selftest] GRAM fill RGB(0,0,255)
+[0m[0m[31m[co5300][probe] ID len1=0x00000033 len2=0x00003311 len3=0x00331100 len4=0x33110000
+[0m[0m[31m[co5300][probe] 0x0A=0x0000009c 0x0B=0x00000000 0x0C=0x00000055 0x0D=0x00000008
+[0m[0m[31m[co5300][probe] 0x0E=0x00000000 0x0F=0x000000c0 0x3A=0x00000055 0x52=0x000000ff
+[0m[0m[31m[co5300][probe] after magenta fill: GRAM len4=0x7f00007f len2=0x00007f00 | ID(again) len3=0x00331100
+[0m[0m[31m[co5300][readback] GRAM(0x2E)=7f 00 00 7f -> NO MATCH -> pixel data is not landing (QSPI write/mode)
+[0m[0m[31m[co5300][selftest] both tests done
+[0m[0m[31m[ft6146][diag] touch_register ret=0
+[0m[0m[31m[ft6146][diag] irq_pin=31 addr=0x38 freq=400000
+[0m[0m[31;1m[LVGL] [User]	(23.144, +7879)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 opening lv_nuttx_touchscreen.c:79
+[0m[0m[31;1m[LVGL] [User]	(23.149, +5)	 lv_nuttx_touchscreen_create: touchscreen /dev/input0 open success, maxpoint 1 lv_nuttx_touchscreen.c:98
+[0m[0m[31m[mianyu] 触摸已补挂 indev=0x20044478
+[0m  01:17:25  [清醒] 规律度=0.00 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+01:17:30  [清醒] 规律度=0.00 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+01:17:36  [清醒] 规律度=0.00 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+01:17:41  [清醒] 规律度=0.00 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+01:17:47  [清醒] 规律度=0.26 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+01:17:52  [清醒] 规律度=0.25 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%
+01:17:58  [清醒] 规律度=0.22 呼吸率=  0.0/分 体动=0.000  音量=0% 灯=0%

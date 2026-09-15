@@ -103,7 +103,7 @@ python tests/pc_build.py app       # 等价 make app
 | `tests/` | 465 条单元测试 + `pc_build.py`（无 make 环境下的构建驱动） |
 | `demo/night_demo.c` | 单晚压缩演示 |
 | `skills/` | 3 个自定义 Skill：sleep-onset / night-wake / sleep-review |
-| `docs/` | 真机运行证据、界面真机验证、测试记录表、首启检查清单、框图 |
+| `docs/` | 真机运行证据、界面真机验证、**版本迭代日记（36 版）**、测试记录表、首启检查清单、框图 |
 | `logs/` | AI Coding 协作记录 + 板上启动日志原文 |
 | `contest2026_485_xiaomingTV.xml` | 专属仓 manifest：把本仓 `app/mianyu` 链到 openvela 的 packages 下 |
 
@@ -112,6 +112,8 @@ python tests/pc_build.py app       # 等价 make app
 过程和数据都在 [`docs/真机运行证据_20260914.md`](docs/真机运行证据_20260914.md)、
 [`docs/手表界面_真机验证_20260915.md`](docs/手表界面_真机验证_20260915.md)
 和 [`docs/测试记录表.md`](docs/测试记录表.md)。
+按固件版本顺序的完整调试流水在 [`docs/版本迭代日记.md`](docs/版本迭代日记.md)，
+**36 版里跑通 6 版、失败 30 版，失败的也都留着**（含每版的失败原文和根因）。
 
 跑通的：核心算法和界面进了固件并在板上运行、**手表界面两个页面都建起来了且触摸可用**、
 串口语音链路 20 秒零丢帧、板载麦克风采集（12 秒真人环境音）、

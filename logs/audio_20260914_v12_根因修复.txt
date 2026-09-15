@@ -1,0 +1,130 @@
+== 串口枚举: 1 个 ==
+COM6     USB-Enhanced-SERIAL CH343 (COM6)
+使用端口: COM6
+== 烧录 ==
+C:\Users\Administrator\Desktop\mianyu-fw\sftool.exe -c SF32LB52 -p COM6 -b 1000000 write_flash nuttx_audio3.bin@0x12010000
+32%
+40%
+48%
+56%
+64%
+72%
+80%
+88%
+96%
+100%
+0%
+100%
+-> OK (rc=0)
+== 抓取启动日志 (120s) ==
+日志已存: C:\Users\Administrator\Desktop\mianyu-fw\bootlog_diag_20260914_194233.txt (6794 字节)
+---- 日志正文 ----
+ABCDADC calibration data missing, use defaults
+ADC calibration ratio=1068 offset=822
+ADC /dev/adc0 init done, ret=0
+WARN: LSM6DS3 not found at 0x6a on I2C1: -5
+ERROR: LSM6DS3 register failed on I2C1: -5
+ERROR: sf32lb52_lsm6ds3_initialize failed: -5
+WARN: skip HAL_FLASH_Init during XIP bringup, NOR write/erase disabled
+INFO: NOR MTD registered at /dev/config0 (offset=2464 blocks=1024)
+[audio] audio_test 任务已启动 (pid=5)
+[audio] === 音频通路三段式自检开始（10 轮）===
+[audio] DMA TX 中断号 66（DMAC1_CH1_IRQn=50）
+[audio] 音频时钟已使能（HXT BUF_AUD + AUDCODEC 门控）
+[audio] PLL/数字块使能位已置（EN_DIG/SDM/CLK_DIG + 模拟偏置，未做锁频校准）
+[audio] REFGEN 使能（模拟参考源）
+[audio] HAL_AUDCODEC_Init -> 0
+[audio] Config_TChanel -> 0
+[audio] Transmit_DMA（6400 字节 / 2x1600 采样，循环）-> 0
+[audio] DMA 实际分配到通道 1（请求号 41），IRQ 66
+[audio] DMA TX irq 66 已挂载
+NuttShell (NSH)
+nsh> [K[audio] Config_Analog_DACPath -> 0
+[co5300][diag] VADD_EN (PA37) driven HIGH
+[bl][diag] backlight ON  (PA01=1) #1/3
+[audio] PA10 使能（功放 NS4150B）
+[audio] [init] ID=c0dec000 CFG=0000001a PLL_STAT=00000004
+[audio] [init] BG_CFG0=00001931 REFGEN_CFG=00000005 DAC_CFG=00000114
+[audio] [init] DAC_CH0_CFG=029b0689 DAC1_CFG=01f78001
+[audio] [init] PLL_CFG0=5bd4ba00 CFG1=00003313 CFG2=00022f80 CFG3=78400000 CFG4=00890972 CFG5=1152d2d2
+[audio] [init] 关键位: EN_DIG(CFG2.b13)=1 EN_SDM(CFG3.b30)=1 EN_CLK_DIG(CFG4.b23)=1 EN_ANA(CFG0.b15)=1
+[audio] [init] DMA1 ISR=00000000 CNDTR1=1348 CCR1=00002abf
+[audio] [init] CPAR1=50088050 CM0AR1=2001b658 CSELR1=00000029
+[audio] [init] NVIC hwirq50 en=1 pend=0 | NuttX irq66 | HT=0 TC=0 TE=0
+[bl][diag] backlight OFF (PA01=0) #1/3
+[bl][diag] backlight ON  (PA01=1) #2/3
+[bl][diag] backlight OFF (PA01=0) #2/3
+[audio] 起播 1s 后中断计数: HT 5 / TC 5
+[audio] [1s] DMA1 ISR=00000000 CNDTR1=1233 CCR1=00002abf
+[audio] [1s] CPAR1=50088050 CM0AR1=2001b658 CSELR1=00000029
+[audio] [1s] NVIC hwirq50 en=1 pend=0 | NuttX irq66 | HT=5 TC=5 TE=0
+[bl][diag] backlight ON  (PA01=1) #3/3
+[audio] CNDTR1 采样: 首=1213 末=281 -> DMA 在搬（问题在中断派发）
+[audio] 中断正常（HT/TC 都在涨），走中断路径，不用轮询
+[audio] 工作模式: DMA 中断
+[audio] round 1 STAGE A: 通路开、静音 8 s（听底噪/上电声）
+[bl][diag] backlight OFF (PA01=0) #3/3
+[bl][diag] backlight left ON (PA01=1)
+[co5300][diag] panel ReadID=0x331100 expected 0x331100 (match)
+[co5300][diag] init done: DISPLAY_ON issued
+[co5300][selftest] brightness set to 0xff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,255,255) 565=0xffff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,0,0) 565=0xf800
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,255,0) 565=0x07e0
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,0,255) 565=0x001f
+[co5300][cmdtest] done
+[co5300][selftest] GRAM fill RGB(255,255,255)
+[co5300][selftest] GRAM fill RGB(255,0,0)
+[co5300][selftest] GRAM fill RGB(0,255,0)
+[co5300][selftest] GRAM fill RGB(0,0,255)
+[co5300][probe] ID len1=0x00000033 len2=0x00003311 len3=0x00331100 len4=0x33110000
+[co5300][probe] 0x0A=0x0000009c 0x0B=0x00000000 0x0C=0x00000055 0x0D=0x00000008
+[co5300][probe] 0x0E=0x00000000 0x0F=0x000000c0 0x3A=0x00000055 0x52=0x000000ff
+[co5300][probe] after magenta fill: GRAM len4=0x7f00007f len2=0x00007f00 | ID(again) len3=0x00331100
+[co5300][readback] GRAM(0x2E)=7f 00 00 7f -> NO MATCH -> pixel data is not landing (QSPI write/mode)
+[co5300][selftest] both tests done
+[co5300][diag] panel ReadID=0x331100 expected 0x331100 (match)
+[co5300][diag] init done: DISPLAY_ON issued
+[co5300][selftest] brightness set to 0xff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,255,255) 565=0xffff
+[co5300][cmdtest] ALL_PIXEL_ON RGB(255,0,0) 565=0xf800
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,255,0) 565=0x07e0
+[co5300][cmdtest] ALL_PIXEL_ON RGB(0,0,255) 565=0x001f
+[co5300][cmdtest] done
+[co5300][selftest] GRAM fill RGB(255,255,255)
+[co5300][selftest] GRAM fill RGB(255,0,0)
+[co5300][visual] three-stage test start: A blink / B all-pixel / C colour fill, 10 rounds x 24 s
+[co5300][visual] round 0 STAGE A: 0x28/0x29 display blink 8 s
+[co5300][selftest] GRAM fill RGB(0,255,0)
+[co5300][selftest] GRAM fill RGB(0,0,255)
+[co5300][probe] ID len1=0x00000033 len2=0x00003311 len3=0x00331100 len4=0x33110000
+[co5300][probe] 0x0A=0x0000009c 0x0B=0x00000000 0x0C=0x00000055 0x0D=0x00000008
+[co5300][probe] 0x0E=0x00000000 0x0F=0x000000c0 0x3A=0x00000055 0x52=0x000000ff
+[co5300][probe] after magenta fill: GRAM len4=0x7f00007f len2=0x00007f00 | ID(again) len3=0x00331100
+[co5300][readback] GRAM(0x2E)=7f 00 00 7f -> NO MATCH -> pixel data is not landing (QSPI write/mode)
+[co5300][selftest] both tests done
+[co5300][visual] round 0 STAGE B: 0x23 ALL_PIXEL_ON white 8 s
+[co5300][visual] round 0 STAGE C: GRAM fill 8 s
+[co5300][visual] round 1 STAGE A: 0x28/0x29 display blink 8 s
+[co5300][visual] round 1 STAGE B: 0x23 ALL_PIXEL_ON white 8 s
+[audio] round 1 STAGE B: 1kHz 单音 8 s
+[co5300][visual] round 1 STAGE C: GRAM fill 8 s
+[co5300][visual] round 2 STAGE A: 0x28/0x29 display blink 8 s
+[co5300][visual] round 2 STAGE B: 0x23 ALL_PIXEL_ON white 8 s
+[co5300][visual] round 2 STAGE C: GRAM fill 8 s
+[co5300][visual] round 3 STAGE A: 0x28/0x29 display blink 8 s
+[co5300][visual] round 3 STAGE B: 0x23 ALL_PIXEL_ON white 8 s
+[audio] round 1 STAGE C: 八音阶循环 8 s（听音高变化）
+[co5300][visual] round 3 STAGE C: GRAM fill 8 s
+[co5300][visual] round 4 STAGE A: 0x28/0x29 display blink 8 s
+---- 正文结束 ----
+== 自动判读 ==
+- 背光自检: 看到 3 次 PA01 拉高(正常应有 3 次) -> 背光通路有反应, 请回看屏幕是否闪了 3 下
+- 命令通路测试: 已发起 8 次 ALL_PIXEL_ON(0x23)/OFF(0x22)
+- 数据通路测试: 已发起 8 次全屏 GRAM 填充
+-    >> 判决(盯屏): 整屏出现 白/红/绿/蓝 闪烁 = 命令通路通; 随后再出现 4 次纯色填充 = 数据通路也通, 那么问题在 fb/LVGL/应用层; 只有前者不然后者 = 命令到得了但像素数据到不了; 两者都毫无反应 = QSPI 写根本没送到面板(供电/复位/引脚/排线)
+-    >> 注意: 这是 AMOLED 自发光屏, 没有背光, 所以'屏黑'本身是驱动只写命令不写像素的正常状态, 不能当故障证据
+- 显示测试: 双通路流程均已走完
+- (参考) 背光 GPIO 拉高 3 次: AMOLED 无背光 LED, 此项不会产生可见效果, 仅证明 PA01 被驱动过
+- 面板 ReadID=0x331100 (期望 0x331100; 仅供参考, 驱动不靠它放行)
+- GRAM 回读 = 7f 00 00 7f -> 未命中: 写进去的像素没读回来。注意 0x00/0xFF 这种空白值说明 WRAM 没落地 -> 查 QSPI 写模式(0xC4) / 带宽 / 时序
