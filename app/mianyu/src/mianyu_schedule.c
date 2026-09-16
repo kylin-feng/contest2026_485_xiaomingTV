@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 主动任务调度层实现
+ * 安眠科技 · 主动任务调度层实现
  * 设计动机与健壮性策略见 mianyu_schedule.h。
  *
  * 日期运算采用 Howard Hinnant 的 days_from_civil / civil_from_days

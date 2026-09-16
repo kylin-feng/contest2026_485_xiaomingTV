@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 (MianYu) - 会聊天的哄睡设备
+ * 安眠科技 (mianyu) - 会聊天的哄睡设备
  * 公共定义：采样格式、错误码、平台无关基础类型
  *
  * 定位：核心是 Agent 语音对话；本层是它的两个端 ——

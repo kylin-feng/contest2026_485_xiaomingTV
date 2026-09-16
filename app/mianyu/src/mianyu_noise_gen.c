@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 噪声合成实现
+ * 安眠科技 · 噪声合成实现
  * 定点算法说明见 mianyu_noise_gen.h。
  */
 #include "mianyu_noise_gen.h"

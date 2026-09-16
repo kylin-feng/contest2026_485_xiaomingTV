@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 呼吸光晕 UI 接口
+ * 安眠科技 · 呼吸光晕 UI 接口
  *
  * breathe_lvgl.c 是纯渲染壳，只做「把亮度画成呼吸光晕」。
  * 本头文件把它的接口暴露给 HAL 后端（hal/sf32lb52/mianyu_hal_vela.c），

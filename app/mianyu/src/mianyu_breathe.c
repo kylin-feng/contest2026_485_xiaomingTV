@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 呼吸节律灯光引擎实现
+ * 安眠科技 · 呼吸节律灯光引擎实现
  * 设计动机与产品逻辑见 mianyu_breathe.h。
  *
  * 亮度曲线：

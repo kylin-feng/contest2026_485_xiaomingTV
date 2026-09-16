@@ -1,4 +1,4 @@
-# 眠语（mianyu）— openvela 应用
+# 安眠科技（mianyu）— openvela 应用
 
 > 会聊天的哄睡设备 · openvela AI 硬件开发者大赛 2026 · 队伍 485 · 小鸣TV
 

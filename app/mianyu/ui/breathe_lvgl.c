@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0
  *
- * 眠语 · 呼吸光晕 LVGL 渲染层（openvela 移植资产）
+ * 安眠科技 · 呼吸光晕 LVGL 渲染层（openvela 移植资产）
  *
  * ============================ 职责边界 ============================
  *
@@ -36,7 +36,7 @@
 #include "mianyu_breathe.h"
 
 /* 中文字库：由 lv_font_conv 从「文泉驿微米黑」抽取界面用到的字形生成
- * （吸气 屏息 呼气 放松 跟着光 眠语 · …），随工程一起编译。
+ * （吸气 屏息 呼气 放松 跟着光 · …），随工程一起编译。
  * 不依赖 LVGL 的 montserrat 系列——它不含 CJK 字形。 */
 LV_FONT_DECLARE(lv_font_mianyu_32);
 LV_FONT_DECLARE(lv_font_mianyu_16);

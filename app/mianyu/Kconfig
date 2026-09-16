@@ -1,4 +1,4 @@
-# 眠语 (mianyu) —— 主动式哄睡智能体 / contest2026 team xiaomingTV (id 485)
+# 安眠科技 (mianyu) —— 主动式哄睡智能体 / contest2026 team xiaomingTV (id 485)
 #
 # 【踩坑】不要写 "depends on LVX_USE_DEMOS"。
 #   openvela 全树没有任何 Kconfig 定义 LVX_USE_DEMOS，一旦依赖它，
@@ -8,7 +8,7 @@ config LVX_USE_DEMO_CONTEST2026_485_MIANYU
 	bool "Mianyu soothing sleep agent (contest2026_485)"
 	default n
 	help
-		Enable the mianyu (眠语) soothing-sleep agent for the openvela
+		Enable the mianyu soothing-sleep agent for the openvela
 		AI hardware developer contest 2026 (team xiaomingTV, id 485).
 
 		Runs the platform-independent core (schedule / noise synthesis /
