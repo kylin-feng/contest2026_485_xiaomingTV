@@ -19,6 +19,10 @@ out/
 .vscode/
 .idea/
 
+# Python 字节码（voice/ 与仓根那几个 .py 会生成）
+__pycache__/
+*.pyc
+
 # 真机录制数据（含个人语音，绝不入库）
 recordings/
 *.wav

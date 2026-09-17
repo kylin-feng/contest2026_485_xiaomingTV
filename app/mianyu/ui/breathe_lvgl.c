@@ -41,7 +41,7 @@
 LV_FONT_DECLARE(lv_font_mianyu_32);
 LV_FONT_DECLARE(lv_font_mianyu_16);
 
-/* ---- 颜色与布局（黄山派 AMOLED 390×450；模拟器按同一相对比例） ---- */
+/* ---- 颜色与布局（DevKit-LCD AMOLED 390×450；模拟器按同一相对比例） ---- */
 #define MB_WARM_AMBER       lv_color_hex(0xFFB26B)   /* ~2700K 暖光 */
 #define MB_BG_NEAR_BLACK    lv_color_hex(0x050505)   /* AMOLED 纯黑省电且零光晕 */
 #define MB_TEXT_DIM         lv_color_hex(0x555555)   /* 低亮度灰（不抢眼） */

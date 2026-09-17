@@ -3,7 +3,7 @@
  * 安眠科技 · 噪声合成模块
  *
  * 为什么用算法合成而不是播放音频文件（技术报告 3.4 / 4.5）：
- *   黄山派仅 16MB NOR Flash，ROOT 分区默认 8480KB，LittleFS sector 4KB。
+ *   目标板 SF32LB52-DevKit-LCD 的 NOR Flash 只有 16MB（实测）。
  *   一条 30 秒雨声 WAV（16kHz/16bit/mono）≈ 940KB，存不下几条。
  *   本模块用 PRNG + 滤波器在端侧实时合成白/粉/棕噪，存储占用 0KB，
  *   同时绕开 openvela 音频框架在编解码环节的已知 crash 风险。

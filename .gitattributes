@@ -1,0 +1,23 @@
+# 统一行尾：文本文件一律 LF 存、LF 检出。
+#
+# 为什么需要这个文件：本地若 core.autocrlf=true（Windows 默认常见），检出会把
+# 文本变成 CRLF。而如果直接拿工作树打包提交包，里面的 tools/*.sh、board/*.sh、
+# board/patch_*.sh 就会带 CR，拿到 Linux 上 bash 直接语法报错 —— 2026-09-16
+# 那版提交包就是这么翻的（CRLF 的文本 + 三个脚本在 Linux 上跑不起来）。
+# 加上 eol=lf 之后，行尾不再取决于各人本地的 core.autocrlf 设置。
+* text=auto eol=lf
+
+# 二进制一律不做行尾转换
+*.bin   binary
+*.exe   binary
+*.o     binary
+*.a     binary
+*.elf   binary
+*.zip   binary
+*.tgz   binary
+*.wav   binary
+*.pcm   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.pdf   binary
