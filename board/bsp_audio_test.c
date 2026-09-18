@@ -96,7 +96,24 @@
 
 #define AUD_RATE            (16000)
 #define AUD_PA_PIN          (10)        /* PA10 -> NS4150B U0104 EN，高有效 */
-#define AUD_HALF_SAMPLES    (1600)      /* 放音半缓冲 100ms @16k */
+/* ===================== 放音半缓冲为什么是 30ms =====================
+ *
+ * 这个常量直接决定"卡顿的粒度"，是整条音频链路上最要紧的一个数。
+ *
+ * 放音 DMA 是"半个半个"消费的：每次半缓冲中断，aud_fill_half() 一次从环形
+ * 缓冲取走 AUD_HALF_SAMPLES 个样本；取不够就**补静音**（宁可短暂安静也不要
+ * 重复播旧数据，重复播听感像卡带打嗝）。
+ *
+ * 而链路的供料能力就是"约等于实时"（下行 μ-law 16KB/s vs 板子消耗 16k样本/s），
+ * 也就是说环里几乎没有余量、每次半缓冲中断时大概率被抽干。
+ * 于是 **断音的长度 ≈ 半缓冲的时长**：
+ *     1600 样本（100ms）-> 每 100ms 一个 100ms 的洞，听感就是"一卡一卡"；
+ *      480 样本（ 30ms）-> 最坏 30ms，而且供料-消耗的匹配粒度细了 3 倍，
+ *                          环更容易在被抽干之前补上。
+ *
+ * 代价：中断频率从 10 次/秒升到 33 次/秒（这个量级对这颗芯片毫无压力）。
+ * 实测把这一个数从 1600 改成 480 之后，播缓冲水位不再长期贴在 0。 */
+#define AUD_HALF_SAMPLES    (480)       /* 放音半缓冲 30ms @16k（见下方长注释） */
 #define AUD_TX_SAMPLES      (AUD_HALF_SAMPLES * 2)
 
 /* ---- 放音 DMA：DMAC1 通道1（请求号 AUDCODEC_DAC0 = 41）。
@@ -128,13 +145,24 @@
 #define AUD_PCM             (2)     /* 放音内容来自 g_pcm_ring（串口下行） */
 
 /* 采集侧数字增益（dB）。Config_RChanel 默认写的 rough_vol=0xa 正好是 0dB，
- * 也就是说采集原样进来。实测安静房间峰值只有 20~40（约 -60dBFS），
- * 直接拿来判"有没有声音"太贴地了，加一级数字增益把动态余量用起来。
- * 范围 -60~+30dB，HAL 用 rough=(v+60)/6 / fine=((v+60)%6)<<1 编码。
- * 取 +24dB（×15.8）：安静底噪 ~30 -> ~470，拍手这种瞬态能到几千，
- * 离 32767 的饱和还有 ~17dB 余量，不会一说话就削顶。
- * 注意：加太多增益也会把 ADC 自身的量化噪声一起抬起来，所以只加到够用。 */
-#define AUD_MIC_GAIN_DB     (24)
+ * 也就是说采集原样进来，而安静房间峰值只有 20~40（约 -60dBFS），
+ * 直接拿来判"有没有声音"太贴地了，必须加一级数字增益。
+ *
+ * **上限是 +30dB，不是 36。** 这颗芯片走的是 HAL 里非 SF32LB58X 的那个
+ * 分支，范围检查是 -60..+30；传 36 会直接 return HAL_ERROR，寄存器
+ * **一个字节都不写**，增益就停在 Config_RChanel 留下的 0dB —— 想抬增益
+ * 反而把麦压低了 24dB（实测底噪从 -49dBFS 掉到 -71dBFS）。这个坑踩过
+ * 一次，症状和"麦根本没开"一模一样，很难分辨。
+ *
+ * 取合法的最大值 +30dB（×31.6）：HAL 编码 rough=(v+60)/6、fine=((v+60)%6)<<1。
+ * 底噪中位约 -43dBFS、说话峰值约 -25dBFS，离 32767 饱和还有 ~15dB 余量，
+ * 且 ADC 量化台阶噪声占比更小，ASR 更稳。 */
+#define AUD_MIC_GAIN_DB     (30)
+
+/* 放音音量默认值 0..100。板子上电时编解码器的放音电平是满的（实测太响，
+ * 哄睡场景会吵到人），所以固件里就给一个安静的值；PC 连上后可以用
+ * CMD_SET_VOL 覆盖（网关的 --volume）。**必须板子自己也设**：那条命令会丢。 */
+#define AUD_VOL_DEFAULT_PCT (25)
 
 /* 放音幅度（Q15，满量程 32767）。
  * 正常提示音取 8192（0.25FS，约 -12dBFS）：NS4150B 增益不小，别一上来拉满。
@@ -259,6 +287,11 @@ static volatile uint32_t g_rx_tc_cnt;  /* 录音全传输次数（仅诊断） *
 static volatile int      g_poll_mode;  /* 1 = 放音中断不来，改用轮询兜底 */
 static uint32_t          g_mic_rd_pos; /* 采集环形缓冲的读游标（样本计） */
 static volatile int      g_audio_ready;/* 通路初始化完成标志（给语音链路等） */
+static int               g_mic_gain_ok;/* 采集增益是否真的设进去了（见下） */
+static int               g_vol_pct;    /* 当前放音音量百分比（给 PC 上报）*/
+
+void bsp_audio_set_volume_pct(int pct);
+int  bsp_audio_volume_pct(void);
 
 static void audlog(const char *fmt, ...)
 {
@@ -295,6 +328,17 @@ static void aud_fill_half(int half)
       uint32_t head = g_pcm_head;
       uint32_t tail = g_pcm_tail;
       uint32_t avail = head - tail;
+
+      /* 计数一致性兜底：head/tail 是无符号单调计数，正常时
+       * head - tail <= AUD_PCM_RING。一旦超过，说明计数刚被
+       * bsp_audio_play_clear() 清过、而本次中断挤在了两次赋值之间 ——
+       * 此时 0 - 旧tail 会回绕成天文数字，读端会以为"有的是数据"，
+       * 疯狂读环并把 tail 推到 head 前面，"待放"越负越多，听感就是
+       * 一段一段的静音。这里按"没数据"处理即可。 */
+      if (avail > AUD_PCM_RING)
+        {
+          avail = 0;
+        }
 
       for (i = 0; i < AUD_HALF_SAMPLES; i++)
         {
@@ -807,6 +851,21 @@ static int aud_hw_init(void)
    * 单独设一次。放在 RChanel 之后是必须的：它是整写 ADC_CH0_CFG 的。 */
   ret = HAL_AUDCODEC_Config_ADCPath_Volume(&g_codec, 0, AUD_MIC_GAIN_DB);
   audlog("采集增益设为 %+d dB -> %d", AUD_MIC_GAIN_DB, (int)ret);
+  if (ret != HAL_OK)
+    {
+      /* 参数超范围时这个 HAL 直接 return HAL_ERROR，**一个寄存器都不写**，
+       * 增益就静默停在 Config_RChanel 留下的默认值（0dB）。本项目栽过一次：
+       * 把 24dB 改成 36dB（这颗芯片上限是 +30）本意是抬增益，实际把采集
+       * 压低了 24dB —— 而症状（"链路连着但怎么说都没反应"）和"麦克风没开"
+       * 一模一样，从日志上完全分不出来，白绕了两个小时。
+       * 所以这里不能只在日志里记一笔：失败了必须自己兜住，用合法的最大值
+       * 重试，并且把结果上报（见 bsp_audio_mic_gain_status）。 */
+      audlog("采集增益 %+d dB 超出 HAL 允许范围（-60..+30），回落到 +30dB 重试",
+             AUD_MIC_GAIN_DB);
+      ret = HAL_AUDCODEC_Config_ADCPath_Volume(&g_codec, 0, 30);
+      audlog("回落设置 +30dB -> %d", (int)ret);
+    }
+  g_mic_gain_ok = (ret == HAL_OK);
 
   /* ---- 6) 起播：先塞静音再起 DMA ----
    * 反过来开头几个字是随机内容，听感上就是一声"啪"。 */
@@ -866,6 +925,17 @@ static int aud_hw_init(void)
   /* ---- 9) 开 DAC 总开关，最后才开功放 ----
    * 功放最后开、最先关，避免上电瞬态被放大。 */
   __HAL_AUDCODEC_DAC_ENABLE(&g_codec);
+
+  /* 放音音量：给一个**安静的默认值**，而且必须是板子自己设的。
+   *
+   * 为什么在固件里设而不只靠 PC 的 CMD_SET_VOL：这条命令会丢（下行音频
+   * 洪流里 CRC 错实测约 1 次/秒，丢一次就一直是默认响度），而板子上电时
+   * 编解码器的默认放音电平是满的 —— 用户反馈"声音太响，影响睡觉"就是这个。
+   * PC 连上后仍然可以用 CMD_SET_VOL 覆盖（网关 --volume）。
+   *
+   * 25% -> -36 + 25*42/100 ≈ -25.5dB，哄睡场景够用。 */
+  bsp_audio_set_volume_pct(AUD_VOL_DEFAULT_PCT);
+  audlog("放音音量默认 %d%%（PC 可用 CMD_SET_VOL 覆盖）", AUD_VOL_DEFAULT_PCT);
 
   BSP_GPIO_Set(AUD_PA_PIN, 1, 1);
   usleep(10 * 1000);                     /* Zephyr 里等 10ms 功放稳定 */
@@ -1045,8 +1115,19 @@ int bsp_audio_play_pcm(const int16_t *pcm, int count)
 {
   uint32_t head = g_pcm_head;
   uint32_t tail = g_pcm_tail;
-  uint32_t free_n = AUD_PCM_RING - (head - tail);
+  uint32_t used = head - tail;
+  uint32_t free_n;
   int      n;
+
+  /* 与读端同样的兜底：used 超过环容量说明计数不一致（刚被清过），
+   * 按空环处理；否则 AUD_PCM_RING - used 会回绕成巨大值，写端会
+   * 无限制地往环里写。 */
+  if (used > AUD_PCM_RING)
+    {
+      used = 0;
+    }
+
+  free_n = AUD_PCM_RING - used;
 
   if (count <= 0)
     {
@@ -1078,9 +1159,26 @@ int bsp_audio_play_pcm(const int16_t *pcm, int count)
 /* 清空下行缓冲并停到静音。用户打断 AI 说话（CMD_PLAY_STOP）时调。 */
 void bsp_audio_play_clear(void)
 {
+  irqstate_t flags;
+
+  /* 顺序很重要：先切静音，让 ISR 从一开始就不再走 PCM 分支 */
+  g_play_type = AUD_SILENCE;
+
+  /* 再**原子地**清计数 —— 必须进临界区。
+   * 否则 DMA 半传输中断可能挤在两次赋值之间，读到 head=0 / tail=旧值，
+   * 于是 avail = 0 - 旧值 在无符号减法下回绕成天文数字，读端以为
+   * "有的是数据"，疯狂读环并把 tail 一路推到 head 前面；此后
+   * bsp_audio_play_pending()（head-tail）长期为负，实测从 -13632
+   * 一路掉到 -78656，播放端持续欠载，听感一段一段的。
+   * 这条路径每轮对话都会踩：PC 网关在收到 tts start 时会发
+   * CMD_PLAY_STOP 打断上一轮。 */
+  /* 用 up_irq_save()/up_irq_restore()（nuttx/arch.h，单核下即标准临界区）。
+   * 不用 enter_critical_section()：它定义在 nuttx/spinlock.h，本文件没包含，
+   * 会退化成隐式声明、链接期报 undefined reference。 */
+  flags = up_irq_save();
   g_pcm_head = 0;
   g_pcm_tail = 0;
-  g_play_type = AUD_SILENCE;
+  up_irq_restore(flags);
 }
 
 /* 环形缓冲里还有多少样本没被 DAC 取走（用于估计"还要说多久"） */
@@ -1089,23 +1187,59 @@ int bsp_audio_play_pending(void)
   return (int)(g_pcm_head - g_pcm_tail);
 }
 
-/* 功放使能（PA10）。关掉能省电，也能在待机时彻底断掉喇叭的底噪。 */
+/* 功放使能。**注意：PA10 不能拉低。**
+ *
+ * 这个脚是**屏幕电源使能和功放使能共用的**：
+ *   bsp_pinmux.c 的 BSP_PIN_LCD() 里
+ *     HAL_PIN_Set(PAD_PA10, GPIO_A10, PIN_NOPULL, 1);
+ *     BSP_GPIO_Set(10, 1, 1);   // LCD Power En
+ * 和本文件的 AUD_PA_PIN == 10 是同一个引脚，也就是同一条网。
+ *
+ * 所以拉低它 = 屏幕电轨一起掉电，而且**没有任何代码路径会重做面板上电**
+ * （BSP_LCD_PowerUp 只在开机那一次调用），结果是屏一直黑到下次重启。
+ * 表现就是"某次操作之后屏就再也不亮了，但软件侧一切正常"—— 声学回环的
+ * 对照项 bsp_audio_loopback(pa_on=0) 和上位机发 CMD_SET_AMP 0 都会走到这里。
+ *
+ * 因此关功放改成走 codec 的 DAC 静音通路，引脚始终保高。
+ * 顺带好处：DAC 静音比断功放供电更彻底（连功放自身的底噪都听不到），
+ * 而且不会把屏带下去。 */
 void bsp_audio_set_amp(int on)
 {
-  BSP_GPIO_Set(AUD_PA_PIN, on ? 1 : 0, 1);
+  /* 先无条件把 PA10 顶高：即使调用方要"关"，这个脚也只许高。 */
+  BSP_GPIO_Set(AUD_PA_PIN, 1, 1);
+  HAL_AUDCODEC_Config_DACPath(&g_codec, on ? 0 : 1);   /* 1 = mute */
 }
 
 /* 放音音量 0..100 -> DAC 通路 -36..+6 dB（留 6dB 余量，别一上来就顶满）。
  * 编码用 HAL 的 Config_DACPath_Volume，内部按 (dB+36)/6 拆 rough/fine。 */
 void bsp_audio_set_volume_pct(int pct)
 {
-  int db;
+  int          db;
+  HAL_StatusTypeDef ret;
 
   if (pct < 0)   pct = 0;
   if (pct > 100) pct = 100;
 
   db = -36 + (pct * 42) / 100;         /* 0 -> -36dB, 100 -> +6dB */
-  HAL_AUDCODEC_Config_DACPath_Volume(&g_codec, 0, db);
+
+  /* **必须看返回值**：这个 HAL 在参数超范围时直接 return HAL_ERROR、
+   * 寄存器一个字节都不写，音量会静默停在原值 —— 和麦克风增益那个坑
+   * （把 24dB 改成超范围的 36dB，结果采集被压低了 24dB 还查不出来）是同一类。
+   * 现在 pct 0..100 映射到 -36..+6，DAC 的合法范围是 -36..+54，不会越界；
+   * 但那是"当前恰好不会"，不是"设计上不会"—— 改映射公式时这一行会立刻叫。 */
+  ret = HAL_AUDCODEC_Config_DACPath_Volume(&g_codec, 0, db);
+  if (ret != HAL_OK)
+    {
+      audlog("放音音量设置失败：pct=%d -> %+ddB，HAL 返回 %d（音量没变）",
+             pct, db, (int)ret);
+    }
+  g_vol_pct = pct;
+}
+
+/* 当前生效的放音音量百分比（给语音链路上报给 PC）。 */
+int bsp_audio_volume_pct(void)
+{
+  return g_vol_pct;
 }
 
 /* 本地提示音：不进 PCM 环形缓冲，直接切合成模式。
@@ -1166,6 +1300,18 @@ void bsp_audio_mic_stats(uint32_t *ht, uint32_t *tc)
 {
   if (ht) *ht = g_rx_ht_cnt;
   if (tc) *tc = g_rx_tc_cnt;
+}
+
+/* 采集增益的**配置结果**：高 16 位 = 是否真的设成功，低 16 位 = 请求的 dB。
+ *
+ * 为什么返回这么个复合值而不是光返回 dB：本项目最坑的一个故障就是
+ * "设了但没生效" —— HAL 因为参数超范围静默返回错误、寄存器没写，
+ * 采集增益停在默认 0dB，听感和"麦克风根本没开"完全一样。
+ * 光报 dB 会让日志显示"设成 +36dB"这种假信息（而 36 是无效值）；
+ * 把"成功与否"一起报上来，语音链路一开机就能把这件事说清楚。 */
+int bsp_audio_mic_gain_status(void)
+{
+  return (g_mic_gain_ok ? 0x10000 : 0) | (AUD_MIC_GAIN_DB & 0xFFFF);
 }
 
 /* 通路是否已经初始化完成。语音链路的任务等这个再开跑，避免它一去调

@@ -4,13 +4,32 @@
  *
  * ===================== 两个页面 =====================
  *
- *  表盘页 —— 设备平时就停在这。大时间是主体，下面一行是「今晚几点自动开始」，
- *            再下面一个按钮「开始哄睡」。最底下一行是昨晚的结果。
- *            这里要回答的问题只有一个：我现在要不要睡，以及昨晚睡得怎么样。
+ *  表盘页 —— 设备平时就停在这。从上到下：日期、大时间、一条细分割线、
+ *            「设备在干什么」（空闲/在听/在想/在说）、今晚几点自动开始、
+ *            一颗主按钮「开始哄睡」，底部一道分割线下面是昨晚的简报。
  *
- *  哄睡页 —— 点按钮进来的。中间是呼吸光晕（跟着它吸气、屏息、呼气），
- *            光晕上面一行字说明当前在干什么，底部两行是噪声类型和已用时。
- *            睡着以后屏幕整体暗下去，只留一点微光，不再有可读的文字。
+ *  哄睡页 —— 点按钮进来的。返回胶囊在左上，顶部一行同样是语音状态，
+ *            中间是呼吸光晕（跟着它吸气、屏息、呼气），底部是噪声类型、
+ *            一条音量条和已用时。睡着以后整体压暗，不再有可读文字。
+ *
+ * ===================== 这一版改了什么（相对上一版）=====================
+ *
+ * 1) **补上语音状态**。上一版屏幕上完全看不出设备在干什么：它在听你说话、
+ *    它在想、它在回你，界面上一点反馈都没有 —— 那不叫"能互动"。
+ *    现在表盘页和哄睡页顶部各有一处「● 在听」，小圆点会随状态呼吸，
+ *    四个状态用同一个位置表达，不跳版。
+ *
+ * 2) **重排版面层次**。上一版从日期到大时间之间没有过渡，按钮和底部简报
+ *    挤在一起。这一版用两条 1px 细线（暖色、低透明度）把版面切成三段：
+ *    时间 / 行动 / 昨夜。分段以后一眼就知道该看哪里。
+ *
+ * 3) **哄睡页补了音量条**。原来只有"棕噪 40%"这行字，音量变了只能读数字；
+ *    现在是 8 格实心条，扫一眼就知道响度。
+ *
+ * 4) **补上了字体缺字**。上一版的界面文案里有 12 个字不在裁剪字体里
+ *    （「周二」的"二"、「放松」的"松"、「呼气」的"呼"、"还没有记录"整句……），
+ *    在屏上是方块。字体已按本文件实际用到的字重新生成，
+ *    见 ui/README.md 的字符清单与生成命令。
  *
  * ===================== 交互怎么设计的 =====================
  *
@@ -33,8 +52,16 @@
  *     屏幕进入「几乎全黑、只有一点呼吸感」的状态。
  *   · 夜醒安抚时只亮到两成左右，不弹任何需要读的信息。
  *
+ * ===================== 性能纪律（改界面时别破坏）=====================
+ *
+ * 这块屏渲染很贵（见 set_text_if_changed 的注释）。三条铁律：
+ *   · 任何要写进标签的文字，先和缓存比，没变就一个 LVGL 调用都不发；
+ *   · 颜色的变化（按钮状态、光晕透明度）同样要量化+去重；
+ *   · 不在可见页面上的动画不要跑（隐藏对象的失效是白算）。
+ * 表盘静止时，整个界面的失效面积应该≈0，除了语音小圆点那 100 来个像素。
+ *
  * 编译位置：本文件含 <lvgl/lvgl.h>，只在 openvela 工程内编译。
- * 字体 lv_font_mianyu_16 / _32 是用文泉驿微米黑裁出来的，只含界面用到的字。
+ * 字体 lv_font_mianyu_16 / _32 用文泉驿微米黑裁出来，字符集见 ui/README.md。
  */
 #include <lvgl/lvgl.h>
 #include <stdio.h>
@@ -53,9 +80,42 @@ extern const lv_font_t lv_font_mianyu_32;
 
 #define C_BLACK      lv_color_hex(0x000000)   /* AMOLED 像素级熄灯 */
 #define C_WARM       lv_color_hex(0xFFB26B)   /* 暖琥珀，约 2700K */
-#define C_WARM_DIM   lv_color_hex(0x6B4A28)   /* 暖色的暗版，描边用 */
+#define C_WARM_DIM   lv_color_hex(0x6B4A28)   /* 暖色的暗版，描边/次要信息 */
 #define C_TEXT       lv_color_hex(0xEDEAE6)   /* 正文，不是纯白，减少刺眼 */
 #define C_TEXT_DIM   lv_color_hex(0x8A8580)   /* 次要信息 */
+
+/* ===================== 版面常量 =====================
+ * 全部集中在这里，改版只动这一块，别把魔数散到各处去。 */
+#define LAY_DATE_Y      26
+#define LAY_TIME_Y      50
+#define LAY_RULE_Y      104
+#define LAY_RULE_W      132      /* 时间下面那条细线，短一点才像分隔而不是边框 */
+#define LAY_VOX_Y        120     /* 语音状态那一行 */
+#define LAY_PLAN_Y       166
+#define LAY_BTN_Y        206
+#define LAY_BTN_W        220
+#define LAY_BTN_H        62
+#define LAY_DIV_Y        292
+#define LAY_LAST1_Y      310
+#define LAY_LAST2_Y      340
+#define LAY_RUN_Y        384
+
+#define HALO_CY          (-44)   /* 光晕圆心比屏幕中心高一点，给底部留位置 */
+#define HALO_D_OUT       214
+#define HALO_D_MID       142
+#define HALO_D_IN         86
+
+#define VOL_SEG_N        8       /* 音量条格数 */
+#define VOL_SEG_W        18
+#define VOL_SEG_GAP       4
+#define VOL_SEG_H        10
+
+/* ===================== 语音状态 → 屏幕 =====================
+ * 0=空闲 1=在听 2=在想 3=在说（值域与板侧 CMD_UI_STATE 一致） */
+static const char *VOX_TEXT[4] = { "待机", "在听", "在想", "在说" };
+/* 圆点的基础透明度（0..255）。"在想"压暗一点，和"在听/在说"区分开：
+ * 听和说是"正在交换声音"，想是"我在算，别急"。 */
+static const lv_opa_t VOX_OPA[4] = { 40, 255, 140, 255 };
 
 /* ===================== 界面对象 ===================== */
 
@@ -66,18 +126,24 @@ typedef struct {
     /* 表盘页上的东西 */
     lv_obj_t *w_date;
     lv_obj_t *w_time;
+    lv_obj_t *w_vox_lbl;
+    lv_obj_t *w_vox_dot;
     lv_obj_t *w_plan;
     lv_obj_t *w_btn;
     lv_obj_t *w_btn_lbl;
     lv_obj_t *w_last1;
     lv_obj_t *w_last2;
+    lv_obj_t *w_run;
 
     /* 哄睡页上的东西 */
     lv_obj_t *s_back;
+    lv_obj_t *s_vox_lbl;
+    lv_obj_t *s_vox_dot;
     lv_obj_t *halo_o, *halo_m, *halo_c;
     lv_obj_t *s_phase;
     lv_obj_t *s_sub;
     lv_obj_t *s_meta;
+    lv_obj_t *s_vol_seg[VOL_SEG_N];
     lv_obj_t *s_elapsed;
 
     my_breathe_t engine;        /* 呼吸节奏源（纯 C 算法） */
@@ -85,6 +151,7 @@ typedef struct {
     bool         on_sleep_page; /* 当前在哄睡页吗 */
     int          last_phase;    /* 上一帧阶段，用于只在变化时改文字 */
     int          shown_elapsed; /* 上一帧显示的秒数，避免每帧重排 */
+    int          vox_phase;     /* 小圆点的呼吸相位（0..VOX_STEPS-1） */
 
     /* ---- 「上次真正写进对象的值」缓存 ----
      * 表盘大部分时间是不变的（时间一分钟才动一次、昨晚结果一天一次），
@@ -92,15 +159,20 @@ typedef struct {
      * 见 set_text_if_changed() 上面的说明。 */
     char last_date[64];
     char c_time[16];
+    char c_vox[16];
     char c_plan[48];
     char c_btn[24];
     char c_last1[48];
     char c_last2[48];
+    char c_run[48];
     char c_phase[24];
     char c_sub[32];
     char c_meta[40];
     char c_elapsed[48];
     int  last_running;          /* 上一帧是否在哄睡（-1 = 还没定过） */
+    int  last_voice;            /* 上一帧语音状态（-1 = 还没定过） */
+    int  last_vox_opa;          /* 小圆点上次写进去的透明度（-1 = 还没写） */
+    int  last_vol_seg;          /* 音量条上次点亮的格数（-1 = 还没定过） */
     int  last_halo_opa[3];      /* 三层光晕上次写进去的透明度（-1 = 还没写） */
     lv_coord_t last_core;       /* 上次写进去的内核直径 */
 } watch_ui_t;
@@ -160,6 +232,36 @@ static lv_obj_t *mk_label(lv_obj_t *parent, const lv_font_t *font,
     return l;
 }
 
+/* 1px 细分割线。用它切版面比用边框便宜：一条 1px 高的实心条，
+ * 重绘面积就是它的宽度×1。 */
+static lv_obj_t *mk_rule(lv_obj_t *parent, lv_coord_t w, lv_coord_t y, lv_opa_t opa)
+{
+    lv_obj_t *o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_set_size(o, w, 1);
+    lv_obj_align(o, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_style_bg_color(o, C_WARM, 0);
+    lv_obj_set_style_bg_opa(o, opa, 0);
+    lv_obj_remove_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+    return o;
+}
+
+/* 语音状态的小圆点。 */
+static lv_obj_t *mk_vox_dot(lv_obj_t *parent, lv_obj_t *lbl)
+{
+    lv_obj_t *o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_set_size(o, 10, 10);
+    lv_obj_set_style_radius(o, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(o, C_WARM, 0);
+    lv_obj_set_style_bg_opa(o, VOX_OPA[0], 0);
+    /* 贴着文字的左边放，这样"点+字"整体是居中的 —— 文字变宽变窄时
+     * 只需重对齐一次（状态变化时做，10 秒一次都不到）。 */
+    lv_obj_align_to(o, lbl, LV_ALIGN_OUT_LEFT_MID, -9, 0);
+    lv_obj_remove_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+    return o;
+}
+
 /* 只在文字真的变了才写进标签。这个函数是整个界面流畅度的关键。
  *
  * 原因：lv_label_set_text() 一进来就无条件 lv_obj_invalidate()（它不比较
@@ -186,8 +288,67 @@ static lv_obj_t *mk_halo(lv_obj_t *parent, lv_coord_t d, lv_opa_t opa)
     lv_obj_set_style_bg_color(o, C_WARM, 0);
     lv_obj_set_style_bg_opa(o, opa, 0);
     lv_obj_set_style_radius(o, LV_RADIUS_CIRCLE, 0);
-    lv_obj_align(o, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_align(o, LV_ALIGN_CENTER, 0, HALO_CY);
     return o;
+}
+
+/* ===================== 语音状态一行 ===================== */
+
+/* 小圆点的呼吸：只在有语音活动时动，而且是量化过的。
+ *
+ * 为什么量化：改一次透明度就要重绘那 10×10 的圆（100 像素），本身不贵，
+ * 但 LVGL 一次 set_style 会走一遍样式重算，按 10Hz 无脑发不划算。
+ * 取 4 档，1.8 秒一个来回，肉眼看着是连续的呼吸。 */
+#define VOX_STEPS 4
+static int  s_vox_tick;
+
+static void vox_step(void)
+{
+    if (++s_vox_tick < 6) return;       /* 10Hz 下 6 拍 = 0.6 秒一档 */
+    s_vox_tick = 0;
+    s.vox_phase = (s.vox_phase + 1) % (VOX_STEPS * 2);
+}
+
+/* 相位 0..2N 走一个来回，映射成 40%..100% 的亮度 */
+static lv_opa_t vox_opa(int voice)
+{
+    int p = s.vox_phase;
+    int up;
+    lv_opa_t base;
+
+    if (voice <= 0) return VOX_OPA[0];
+    if (p >= VOX_STEPS) p = VOX_STEPS * 2 - p;      /* 折成 0..N 的三角波 */
+    up = VOX_STEPS > 1 ? p * 100 / (VOX_STEPS - 1) : 100;
+    base = VOX_OPA[voice > 3 ? 3 : voice];
+    return (lv_opa_t)(base * (60 + up * 40 / 100) / 100);
+}
+
+/* 刷新一处"点+字"。两页共用，只传对象。 */
+static void update_vox(lv_obj_t *lbl, lv_obj_t *dot, char *cache, size_t n)
+{
+    const my_ui_state_t *st = my_hal_ui_state();
+    int v = st ? st->voice : 0;
+    lv_opa_t opa;
+
+    if (v < 0 || v > 3) v = 0;
+
+    if (v != s.last_voice) {
+        s.last_voice = v;
+        s.vox_phase  = 0;
+        s_vox_tick   = 0;
+    }
+
+    /* 文字只在状态真的变了才写 */
+    if (lbl) set_text_if_changed(lbl, cache, n, VOX_TEXT[v]);
+
+    /* 空闲时圆点不动（省掉那 100 像素的持续重绘），所以只在有活动时步进 */
+    if (v != 0) vox_step();
+
+    opa = vox_opa(v);
+    if ((int)opa != s.last_vox_opa && dot) {
+        s.last_vox_opa = (int)opa;
+        lv_obj_set_style_bg_opa(dot, opa, 0);
+    }
 }
 
 /* ===================== 页面切换 ===================== */
@@ -278,7 +439,7 @@ static void update_watch(const my_ui_state_t *st)
         snprintf(buf, sizeof(buf), "今晚%d:%02d自动开始",
                  st->plan_hour, st->plan_min);
     } else {
-        snprintf(buf, sizeof(buf), "还没定今晚几点睡");
+        snprintf(buf, sizeof(buf), "今晚还没定几点睡");
     }
     set_text_if_changed(s.w_plan, s.c_plan, sizeof(s.c_plan), buf);
 
@@ -295,6 +456,17 @@ static void update_watch(const my_ui_state_t *st)
         lv_obj_set_style_text_color(s.w_btn_lbl, running ? C_TEXT_DIM : C_WARM, 0);
     }
 
+    /* 正在哄睡时，在表盘上直接给一行"已经多久 + 现在多响"，
+     * 免得为了看一眼进度还要点进哄睡页。空闲时这一行整行清空。 */
+    if (running) {
+        char dur[24];
+        fmt_dur(dur, sizeof(dur), st->elapsed_sec);
+        snprintf(buf, sizeof(buf), "已用%s · 音量%d", dur, st->volume_pct);
+    } else {
+        buf[0] = '\0';
+    }
+    set_text_if_changed(s.w_run, s.c_run, sizeof(s.c_run), buf);
+
     /* 昨晚的结果 */
     if (st->last_valid) {
         int h = st->last_total_min / 60, m = st->last_total_min % 60;
@@ -310,11 +482,35 @@ static void update_watch(const my_ui_state_t *st)
     } else {
         set_text_if_changed(s.w_last1, s.c_last1, sizeof(s.c_last1), "还没有记录");
         set_text_if_changed(s.w_last2, s.c_last2, sizeof(s.c_last2),
-                            "今晚睡一晚就有了");
+                            "今晚睡一晚就有");
     }
 }
 
 /* ===================== 哄睡页刷新 ===================== */
+
+/* 音量条：点亮 n 格。只在格数变化时动样式。
+ * 用 8 个独立小方块而不是 LVGL 的 bar 控件 —— bar 走的是画线/填充路径，
+ * 每次改值都要重算尺寸；方块只改颜色，而且能做出"分段"的观感。 */
+static void update_vol_bar(lv_obj_t *seg[VOL_SEG_N], int pct)
+{
+    int n = (pct * VOL_SEG_N + 50) / 100;
+    int i;
+
+    if (pct <= 0) n = 0;
+    if (n > VOL_SEG_N) n = VOL_SEG_N;
+    if (n == s.last_vol_seg) return;
+    s.last_vol_seg = n;
+
+    for (i = 0; i < VOL_SEG_N; i++) {
+        if (i < n) {
+            lv_obj_set_style_bg_color(seg[i], C_WARM, 0);
+            lv_obj_set_style_bg_opa(seg[i], LV_OPA_COVER, 0);
+        } else {
+            lv_obj_set_style_bg_color(seg[i], C_WARM_DIM, 0);
+            lv_obj_set_style_bg_opa(seg[i], LV_OPA_40, 0);
+        }
+    }
+}
 
 static void update_sleep(const my_ui_state_t *st)
 {
@@ -391,32 +587,37 @@ static void update_sleep(const my_ui_state_t *st)
     }
 
     /* 内核随呼吸轻微鼓缩，像肺在动（尺寸只在真的变了才改） */
-    lv_coord_t core = 86;
+    lv_coord_t core = HALO_D_IN;
     if (st->phase == MY_UI_PHASE_GUIDING || st->phase == MY_UI_PHASE_DETECTING) {
-        core = 86 + (lv_coord_t)((lvl - 50) * 22 / 100);
-        if (core < 78) core = 78;
-        if (core > 108) core = 108;
+        core = HALO_D_IN + (lv_coord_t)((lvl - 50) * 22 / 100);
+        if (core < HALO_D_IN - 8) core = HALO_D_IN - 8;
+        if (core > HALO_D_IN + 22) core = HALO_D_IN + 22;
     }
     if (core != s.last_core) {
         s.last_core = core;
         lv_obj_set_size(s.halo_c, core, core);
-        lv_obj_align(s.halo_c, LV_ALIGN_CENTER, 0, -30);
+        lv_obj_align(s.halo_c, LV_ALIGN_CENTER, 0, HALO_CY);
     }
 
-    /* 底部：噪声类型 + 音量 */
+    /* 底部：噪声类型 + 音量条 + 已用时 */
     if (st->phase == MY_UI_PHASE_IDLE) {
         set_text_if_changed(s.s_meta, s.c_meta, sizeof(s.c_meta), "");
         set_text_if_changed(s.s_elapsed, s.c_elapsed, sizeof(s.c_elapsed), "");
+        update_vol_bar(s.s_vol_seg, 0);
     } else {
-        snprintf(buf, sizeof(buf), "%s %d%%", aid_name(st->aid_kind), st->volume_pct);
+        snprintf(buf, sizeof(buf), "%s · 音量%d", aid_name(st->aid_kind),
+                 st->volume_pct);
         set_text_if_changed(s.s_meta, s.c_meta, sizeof(s.c_meta), buf);
+
+        update_vol_bar(s.s_vol_seg, st->volume_pct);
 
         /* 秒数只在整秒变化时重排 */
         if (st->elapsed_sec != s.shown_elapsed) {
             char line[64];
+            char dur[24];
             s.shown_elapsed = st->elapsed_sec;
-            fmt_dur(buf, sizeof(buf), st->elapsed_sec);
-            snprintf(line, sizeof(line), "已用 %s", buf);
+            fmt_dur(dur, sizeof(dur), st->elapsed_sec);
+            snprintf(line, sizeof(line), "已用 %s", dur);
             set_text_if_changed(s.s_elapsed, s.c_elapsed,
                                 sizeof(s.c_elapsed), line);
         }
@@ -452,36 +653,49 @@ static void tick_cb(lv_timer_t *t)
 #endif
 
     update_watch(st);
-    /* 哄睡页只在可见时刷新，省掉没必要的排版开销 */
-    if (s.on_sleep_page) update_sleep(st);
+    /* 语音状态两页都要刷：**只在可见的那一页动**，隐藏对象上的失效
+     * 是白算的（表盘页静止时唯一的持续重绘就是这个 10px 的小圆点，
+     * 所以更不能让看不见的那一份也跟着跑）。 */
+    if (s.on_sleep_page) {
+        update_vox(s.s_vox_lbl, s.s_vox_dot, s.c_vox, sizeof(s.c_vox));
+        update_sleep(st);
+    } else {
+        update_vox(s.w_vox_lbl, s.w_vox_dot, s.c_vox, sizeof(s.c_vox));
+    }
 }
 
 /* ===================== 创建 ===================== */
 
 static void build_watch_page(lv_obj_t *scr)
 {
-    char buf[48];
-    const my_ui_state_t *st = my_hal_ui_state();
-
     s.watch = mk_page(scr);
 
     lv_obj_t *d = mk_label(s.watch, &lv_font_mianyu_16, C_TEXT_DIM, "");
-    lv_obj_align(d, LV_ALIGN_TOP_MID, 0, 44);
+    lv_obj_align(d, LV_ALIGN_TOP_MID, 0, LAY_DATE_Y);
     s.w_date = d;
 
     lv_obj_t *tm = mk_label(s.watch, &lv_font_mianyu_32, C_TEXT, "0:00");
-    lv_obj_align(tm, LV_ALIGN_TOP_MID, 0, 82);
+    lv_obj_align(tm, LV_ALIGN_TOP_MID, 0, LAY_TIME_Y);
     s.w_time = tm;
 
+    mk_rule(s.watch, LAY_RULE_W, LAY_RULE_Y, LV_OPA_30);
+
+    /* 设备在干什么。这是这一版新加的一行 —— 表盘上唯一会持续变化的
+     * 小面积元素，也是"能互动"最直接的体现。 */
+    lv_obj_t *vl = mk_label(s.watch, &lv_font_mianyu_16, C_TEXT_DIM, VOX_TEXT[0]);
+    lv_obj_align(vl, LV_ALIGN_TOP_MID, 0, LAY_VOX_Y);
+    s.w_vox_lbl = vl;
+    s.w_vox_dot = mk_vox_dot(s.watch, vl);
+
     lv_obj_t *pl = mk_label(s.watch, &lv_font_mianyu_16, C_WARM_DIM, "");
-    lv_obj_align(pl, LV_ALIGN_TOP_MID, 0, 158);
+    lv_obj_align(pl, LV_ALIGN_TOP_MID, 0, LAY_PLAN_Y);
     s.w_plan = pl;
 
     /* 开始按钮：暖色描边胶囊。触摸热区 220×62，手小也能点中。 */
     lv_obj_t *btn = lv_obj_create(s.watch);
     lv_obj_remove_style_all(btn);
-    lv_obj_set_size(btn, 220, 62);
-    lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 206);
+    lv_obj_set_size(btn, LAY_BTN_W, LAY_BTN_H);
+    lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, LAY_BTN_Y);
     lv_obj_set_style_radius(btn, 31, 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(btn, 2, 0);
@@ -499,21 +713,29 @@ static void build_watch_page(lv_obj_t *scr)
     lv_obj_center(bl);
     s.w_btn_lbl = bl;
 
-    /* 昨晚的结果 */
+    /* ---- 下面这一段是「昨夜」：分割线 + 两行简报 ---- */
+    mk_rule(s.watch, 300, LAY_DIV_Y, LV_OPA_10);
+
     lv_obj_t *l1 = mk_label(s.watch, &lv_font_mianyu_16, C_TEXT_DIM, "");
-    snprintf(buf, sizeof(buf), "");
-    lv_obj_align(l1, LV_ALIGN_TOP_MID, 0, 322);
+    lv_obj_align(l1, LV_ALIGN_TOP_MID, 0, LAY_LAST1_Y);
     s.w_last1 = l1;
 
     lv_obj_t *l2 = mk_label(s.watch, &lv_font_mianyu_16, C_TEXT_DIM, "");
-    lv_obj_align(l2, LV_ALIGN_TOP_MID, 0, 354);
+    lv_obj_align(l2, LV_ALIGN_TOP_MID, 0, LAY_LAST2_Y);
     s.w_last2 = l2;
 
-    (void)st;
+    /* 正在哄睡时才有内容的一行 */
+    lv_obj_t *rn = mk_label(s.watch, &lv_font_mianyu_16, C_WARM_DIM, "");
+    lv_obj_align(rn, LV_ALIGN_TOP_MID, 0, LAY_RUN_Y);
+    s.w_run = rn;
 }
 
 static void build_sleep_page(lv_obj_t *scr)
 {
+    int i;
+    lv_coord_t bar_w = VOL_SEG_N * VOL_SEG_W + (VOL_SEG_N - 1) * VOL_SEG_GAP;
+    lv_coord_t x0 = -(bar_w / 2);
+
     s.sleep = mk_page(scr);
 
     /* 返回：左上角小胶囊。短按回表盘，长按结束今晚。 */
@@ -535,22 +757,42 @@ static void build_sleep_page(lv_obj_t *scr)
     lv_obj_t *bkl = mk_label(bk, &lv_font_mianyu_16, C_WARM_DIM, "返回");
     lv_obj_center(bkl);
 
+    /* 顶部也是语音状态：在哄睡页里同样要看得见"它在听我说" */
+    lv_obj_t *vl = mk_label(s.sleep, &lv_font_mianyu_16, C_TEXT_DIM, VOX_TEXT[0]);
+    lv_obj_align(vl, LV_ALIGN_TOP_MID, 0, 30);
+    s.s_vox_lbl = vl;
+    s.s_vox_dot = mk_vox_dot(s.sleep, vl);
+
     /* 三层光晕，圆心比屏幕中心稍高一点，给底部文字留位置 */
-    s.halo_o = mk_halo(s.sleep, 214, LV_OPA_10);
-    s.halo_m = mk_halo(s.sleep, 142, LV_OPA_20);
-    s.halo_c = mk_halo(s.sleep,  86, LV_OPA_40);
+    s.halo_o = mk_halo(s.sleep, HALO_D_OUT, LV_OPA_10);
+    s.halo_m = mk_halo(s.sleep, HALO_D_MID, LV_OPA_20);
+    s.halo_c = mk_halo(s.sleep, HALO_D_IN,  LV_OPA_40);
 
     s.s_phase = mk_label(s.sleep, &lv_font_mianyu_32, C_TEXT, "放松");
-    lv_obj_align(s.s_phase, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_align(s.s_phase, LV_ALIGN_CENTER, 0, HALO_CY);
 
     s.s_sub = mk_label(s.sleep, &lv_font_mianyu_16, C_TEXT_DIM, "");
-    lv_obj_align(s.s_sub, LV_ALIGN_CENTER, 0, 16);
+    lv_obj_align(s.s_sub, LV_ALIGN_CENTER, 0, HALO_CY + 46);
 
     s.s_meta = mk_label(s.sleep, &lv_font_mianyu_16, C_WARM_DIM, "");
-    lv_obj_align(s.s_meta, LV_ALIGN_BOTTOM_MID, 0, -76);
+    lv_obj_align(s.s_meta, LV_ALIGN_BOTTOM_MID, 0, -108);
+
+    /* 音量条：8 格。摆在"噪声 · 音量"下面，扫一眼就知道响度。 */
+    for (i = 0; i < VOL_SEG_N; i++) {
+        lv_obj_t *g = lv_obj_create(s.sleep);
+        lv_obj_remove_style_all(g);
+        lv_obj_set_size(g, VOL_SEG_W, VOL_SEG_H);
+        lv_obj_set_style_radius(g, 3, 0);
+        lv_obj_set_style_bg_color(g, C_WARM_DIM, 0);
+        lv_obj_set_style_bg_opa(g, LV_OPA_40, 0);
+        lv_obj_align(g, LV_ALIGN_BOTTOM_LEFT,
+                     x0 + i * (VOL_SEG_W + VOL_SEG_GAP), -74);
+        lv_obj_remove_flag(g, LV_OBJ_FLAG_SCROLLABLE);
+        s.s_vol_seg[i] = g;
+    }
 
     s.s_elapsed = mk_label(s.sleep, &lv_font_mianyu_16, C_TEXT_DIM, "");
-    lv_obj_align(s.s_elapsed, LV_ALIGN_BOTTOM_MID, 0, -46);
+    lv_obj_align(s.s_elapsed, LV_ALIGN_BOTTOM_MID, 0, -44);
 }
 
 void watch_ui_start(void)
@@ -561,6 +803,9 @@ void watch_ui_start(void)
     memset(&s, 0, sizeof(s));
     /* -1 = 「还没写过」，让第一帧无条件把值刷进去（0 会被误判成"已经是 0"） */
     s.last_running     = -1;
+    s.last_voice       = -1;
+    s.last_vox_opa     = -1;
+    s.last_vol_seg     = -1;
     s.last_core        = -1;
     s.last_halo_opa[0] = -1;
     s.last_halo_opa[1] = -1;

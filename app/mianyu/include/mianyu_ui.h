@@ -59,6 +59,11 @@ typedef struct {
     int  last_total_min;
     int  last_onset_sec;
     int  last_wakes;
+
+    /* 语音状态：0=空闲 1=在听(用户说话) 2=在想(等模型) 3=在说(AI 播报)。
+     * 界面拿它显示"设备现在在干什么"—— 这是"能互动"该有的那一半：
+     * 屏幕上看得见它在听你说话。值由平台层给（真机=网关下发）。 */
+    int  voice;
 } my_ui_state_t;
 
 /* ---- 平台层实现（真机在 hal/sf32lb52，PC 在 hal/sim）---- */

@@ -18,8 +18,10 @@ MEMS MIC ──► 板子(openvela) ──串口 1Mbps──► PC 网关 ──
 | `board_link.py` | 串口帧通道，板级 `board/bsp_voice_link.c` 的 PC 对端（`T_AUDIO_UP` / `T_AUDIO_DOWN` / `T_EVENT` / `T_CMD` / `T_PING` / `T_LOG`） |
 | `xiaozhi_proto.py` | 小智（xiaozhi-esp32）那套 WebSocket 协议：连接头 / 握手 / 音频帧 / JSON 消息 |
 | `voice_codec.py` | 上行 Opus 编码、下行解码（16 kHz 单声道） |
+| `ulaw.py` | **下行 G.711 μ-law 编解码**。权威实现 —— 板级 `bsp_voice_link.c` 里的解码表必须与它严格一致。用它是为了把下行从原样 PCM 的 32KB/s 砍到 16KB/s：这条串口链路实测没有余量，32KB/s 会让板子的播放环每次半缓冲中断都被抽干、补静音，听感就是「一卡一卡」 |
 | `gateway.py` | 主网关：串口 ↔ WebSocket，含 VAD 断句与 ASR / TTS / LLM 事件打印 |
 | `mock_xiaozhi_server.py` | 假服务器，不接真实后端也能验通整条链 |
+| `real_server.py` | 真后端：阿里百炼 ASR(`qwen3-asr-flash`) + DeepSeek LLM + 百炼 TTS(`qwen-tts`)。下行每轮先连发 15 帧（900ms）垫底再按 1.0x 供料，见 `PRIME_FRAMES` —— 板子播放环只有 1.024 秒，不垫底的话环会被抽干 |
 | `selftest_e2e.py` | 端到端自测（**不接板子**）：握手 / 上行 / VAD / TTS / 下行 / 情感，六项；它自己起假服务器，不用先手动开 |
 
 仓根另有两个配套脚本。它们 `sys.path.insert` 的是**同级** `voice/`，所以放在仓根：

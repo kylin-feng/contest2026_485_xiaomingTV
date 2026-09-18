@@ -330,12 +330,22 @@ void my_hal_light_set(int level_pct)
  */
 extern int bsp_voice_link_send_sleep_state(int state, int conf_pct, int resp_bpm);
 extern int bsp_voice_link_take_remote_cmd(int *kind, int *a, int *b, int *c, int *d);
+extern int bsp_voice_link_ui_state(void);
 
 void my_hal_sleep_report(int state, int conf_pct, int resp_bpm)
 {
     /* 上行丢了不影响哄睡（判定结果只是给 Agent 的信号），所以这里
      * 刻意不把失败往上抛：串口写不进去时板级自己会记 g_tx_short。 */
     (void)bsp_voice_link_send_sleep_state(state, conf_pct, resp_bpm);
+}
+
+int my_hal_voice_state(void)
+{
+    /* 界面要显示"设备现在在干什么"（在听/在想/在说/空闲）。
+     * 这个判断只有 PC 侧做得出来：板子只看得到串口上有没有音频，
+     * 分不出是用户在说还是 AI 在说，更看不到"模型正在算"。
+     * 所以状态由网关发 CMD_UI_STATE 下来，板级只存不判（见 bsp_voice_link.c）。 */
+    return bsp_voice_link_ui_state();
 }
 
 bool my_hal_remote_cmd_take(my_remote_cmd_t *out)

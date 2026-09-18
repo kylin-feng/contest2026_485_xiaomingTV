@@ -375,3 +375,12 @@ bool my_hal_remote_cmd_take(my_remote_cmd_t *out)
 
     return false;
 }
+
+int my_hal_voice_state(void)
+{
+    /* 模拟器上没有语音链路，恒"空闲"。
+     * 刻意不编一段假状态：这个值在真机上是"PC 侧说了算"的东西，模拟器
+     * 里演一段假的只会让人以为 PC 侧真的推了状态。界面在模拟器上不跑
+     * （见 ui/README.md：那条路径上界面接口全是空实现），所以返回 0 够用。 */
+    return 0;
+}

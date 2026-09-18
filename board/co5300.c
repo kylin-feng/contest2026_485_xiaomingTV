@@ -10,8 +10,8 @@
 
 #include <sfconfig.h>
 #include "string.h"
-#include <syslog.h>
 #include "sf32lb_lcd.h"
+#include <syslog.h>   /* v46: bring-up diagnostics on the UART console */
 
 /* RT-Thread graphic pixel format compatibility */
 #define RTGRAPHIC_PIXEL_FORMAT_RGB565  LCDC_PIXEL_FORMAT_RGB565
@@ -138,15 +138,22 @@ static LCDC_InitTypeDef lcdc_int_cfg_qadspi =
     .cfg = {
         .spi = {
             .dummy_clock = 0,
-            /* TE sync disabled unconditionally for bring-up.
+            /* v46 - sync-free, unconditionally.
              *
-             * HAL_LCDC_SYNC_VER makes the LCDC wait for a TE/VSYNC edge
-             * before it moves each frame.  If the panel's TE line is not
-             * routed through the 22p FPC (or the adapter board leaves it
-             * floating) the edge never arrives, no frame is ever pushed,
-             * and the panel stays black while every register write still
-             * reports success.  Sync-free mode is what bring-up needs; it
-             * can be re-enabled once a picture is confirmed.
+             * The vendor guards this with LCD_CO5300_VSYNC_ENABLE and picks
+             * HAL_LCDC_SYNC_VER (wait for the panel's TE edge before each
+             * frame).  With TE sync the LCDC only advances on a TE edge, so
+             * if the TE line is not reaching the SoC the whole panel-update
+             * path silently stalls.  Every build we have measured on this
+             * board ran sync-free and moved real pixels:
+             *
+             *   [lcd][hb] t=25s putarea=140 wrram=380 done=380 timeout=0
+             *
+             * i.e. the LCDC finished every transfer it was given.  Sync-free
+             * is therefore the value with evidence behind it, so it stays on
+             * unconditionally.  (The panel is still told TE is enabled via
+             * 0x35 below when LCD_CO5300_VSYNC_ENABLE is set; that is a
+             * panel-side output setting and is harmless either way.)
              */
             .syn_mode = HAL_LCDC_SYNC_DISABLE,
             .vsyn_polarity = 1,
@@ -161,11 +168,6 @@ static LCDC_InitTypeDef lcdc_int_cfg_qadspi =
 
 
 static LCDC_InitTypeDef lcdc_int_cfg;
-
-/* Last handle handed to LCD_Drv_Init.  Kept so the post-boot visual
- * cycle (started from sf32lb_lcd.c once device registration is done) can
- * drive the panel without reaching into that module's private state. */
-static LCDC_HandleTypeDef *s_diag_hlcdc;
 
 static uint32_t LCD_ReadID(LCDC_HandleTypeDef *hlcdc);
 static void LCD_SetRegion(LCDC_HandleTypeDef *hlcdc, uint16_t Xpos0, uint16_t Ypos0, uint16_t Xpos1, uint16_t Ypos1);
@@ -209,11 +211,44 @@ static void LCD_Clear(LCDC_HandleTypeDef *hlcdc)
 }
 
 
+/* v46 - drive the panel backlight pin (PA01) as a plain GPIO and read the
+ * level back, so the verdict below cannot be fooled by a driver that fails
+ * silently.  PA01 is the module's own "BL PWM" pin (module pin 46) and the
+ * board muxes it to GPTIM1_CH4; nothing else in this tree ever started that
+ * timer, so before v46 it simply sat idle. */
+static void co5300_bl_pin(int level)
+{
+    int rb;
+
+    HAL_PIN_Set(PAD_PA01, GPIO_A1, PIN_NOPULL, 1);
+    HAL_GPIO_WritePin(hwp_gpio1, 1,
+                      level ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    rb = (int)HAL_GPIO_ReadPin(hwp_gpio1, 1);
+    syslog(LOG_ERR, "[co5300][bl] PA01 as GPIO -> %d (readback=%d)\n",
+           level, rb);
+}
+
+
+/* v50 - the panel's analogue enable, PA37 (LCD_VADD_EN).  BSP_LCD_PowerUp
+ * calls BSP_GPIO_Set() for it and prints a line, but nothing ever reads the
+ * pin back, so a silently ineffective write would have gone unnoticed for
+ * the whole bring-up.  Drive it here as a plain GPIO and read the level. */
+static void co5300_vadd_pin(int level)
+{
+    int rb;
+
+    HAL_PIN_Set(PAD_PA37, GPIO_A37, PIN_NOPULL, 1);
+    HAL_GPIO_WritePin(hwp_gpio1, 37,
+                      level ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    rb = (int)HAL_GPIO_ReadPin(hwp_gpio1, 37);
+    syslog(LOG_ERR, "[co5300][vadd] PA37 (LCD_VADD_EN) -> %d (readback=%d)\n",
+           level, rb);
+}
+
+
 static void LCD_Drv_Init(LCDC_HandleTypeDef *hlcdc)
 {
     uint8_t   parameter[14];
-
-    s_diag_hlcdc = hlcdc;
 
     /* Initialize CO5300 low level bus layer ----------------------------------*/
     memcpy(&hlcdc->Init, &lcdc_int_cfg, sizeof(LCDC_InitTypeDef));
@@ -239,12 +274,11 @@ static void LCD_Drv_Init(LCDC_HandleTypeDef *hlcdc)
      */
     {
         uint32_t pid = LCD_ReadID(hlcdc);
-        /* [co5300][diag] always visible on the UART1 console */
+        /* v46: always print this on the console - a mismatch is the fastest
+         * way to tell "panel/FPC problem" from "everything else". */
         syslog(LOG_ERR, "[co5300][diag] panel ReadID=0x%lx expected 0x%x %s\n",
                (unsigned long)pid, LCD_ID,
-               (pid == LCD_ID) ? "(match)" : "(MISMATCH -> panel not\n"
-               "                          responding on QSPI: check 22p FPC,\n"
-               "                          VADD_EN/PA37 and 3V3 on FPC pin 17)");
+               (pid == LCD_ID) ? "(match)" : "(MISMATCH - check 22p FPC)");
     }
 
     /* This board uses fixed panel config via Kconfig; avoid blocking ID read
@@ -291,9 +325,15 @@ static void LCD_Drv_Init(LCDC_HandleTypeDef *hlcdc)
 #else
     LCD_WriteReg(hlcdc, REG_TEARING_EFFECT_OFF, (uint8_t *)NULL, 0);
 #endif
-    parameter[0] = 0x20;
+    /* v48: WRCTRLD(53h)=0x28 - keep BCTRL(D5) and enable DD(D3, dimming).
+     * The vendor value 0x20 clears DD; while the dimming block is disabled
+     * the DBV written through WRDISBV(51h) is not applied by the panel, so
+     * an otherwise healthy AMOLED emits nothing at all.  DBV is raised to
+     * 0xFF for the same reason: any residual dimming must not be able to
+     * masquerade as a dead panel. */
+    parameter[0] = 0x28;
     LCD_WriteReg(hlcdc, REG_WRITE_CTRL_DISPLAY, parameter, 1);
-    parameter[0] = 0x7F;
+    parameter[0] = 0xFF;
     LCD_WriteReg(hlcdc, REG_WBRIGHT, parameter, 1);
 
     parameter[0] = 0xff;
@@ -316,214 +356,132 @@ static void LCD_Drv_Init(LCDC_HandleTypeDef *hlcdc)
     LCD_DRIVER_DELAY_MS(120);
     LCD_WriteReg(hlcdc, REG_DISPLAY_ON, (uint8_t *)NULL, 0);
     LCD_DRIVER_DELAY_MS(20);
-    syslog(LOG_ERR, "[co5300][diag] init done: DISPLAY_ON issued\n");
 
-    /* Bring-up colour ramp.
+    /* v49 fix: brightness MUST be (re)written after SLPOUT + DISPON.
+     * WRDISBV(51h) powers up at its default 00h = 0 % brightness, and the
+     * vendor sequence writes 0x7F BEFORE 0x11 SLPOUT - so if sleep-out
+     * restores the brightness defaults the panel ends up emitting nothing
+     * at all while RDDPM still reports a perfectly healthy display.  That
+     * matches every measurement taken so far (RDDPM=0x9C but black), so
+     * the value is now written again on the far side of DISPON and left at
+     * full scale. */
+    parameter[0] = 0x28;
+    LCD_WriteReg(hlcdc, REG_WRITE_CTRL_DISPLAY, parameter, 1);   /* 53h */
+    parameter[0] = 0xFF;
+    LCD_WriteReg(hlcdc, REG_WBRIGHT, parameter, 1);              /* 51h */
+    LCD_DRIVER_DELAY_MS(30);
+
+    /* ------------------------------------------------------------------
+     * v50 - v49 proved the emission path is dead, so stop poking brightness.
      *
-     * Up to this point the driver has only ever written commands: not a
-     * single pixel has been pushed, so the panel is showing whatever its
-     * GRAM happened to power up with.  "Black screen" is therefore the
-     * expected result even on perfect hardware, which makes it useless as
-     * a fault signal.
+     * What v49 measured, all of it on real hardware:
+     *   51h=0x00 -> RDDISBV(52h)=0x00 ; 51h=0xFF -> RDDISBV=0x00
+     *        the brightness register does not follow what is written to it;
+     *   after the datasheet CMD1 unlock (FE=0x80, F4=0x00, F5=0x00) it is
+     *        still 0x00; the HBM path (66h=0x01 + 63h=0xFF) leaves
+     *        RDCABC(64h) at 0x00 as well;
+     *   and yet RDDIM(0Dh) reads 0x10 while 0x23 is asserted, i.e.
+     *        ALLPON=1 - the panel really does accept and latch
+     *        "all pixels on", it simply emits no light while doing so.
      *
-     * Painting a few full-screen colours here exercises the whole
-     * LCDC -> QSPI -> panel data path with no involvement from fb, LVGL,
-     * TE sync or application code.  What the panel does now is a clean
-     * verdict: colours appear => the data path works and any remaining
-     * problem is in the UI layer; nothing appears => the path itself is
-     * broken (sync, timing, supply or wiring).
-     */
+     * A panel that lamps every pixel on demand but produces no light has no
+     * emission current, and no amount of register writing changes that.  So
+     * v50 does not repeat the brightness work.  It goes after the two things
+     * still untested:
+     *
+     *   a) RDDSC (0Fh), the panel's own self-diagnostic result - if the
+     *      embedded checksum comparison fails, the panel reports its own
+     *      fault and the answer is the module, not the firmware;
+     *   b) a cold re-run of the datasheet power-on order, because VADD_EN
+     *      and the backlight rail may have to rise in a defined order with
+     *      the panel held in reset - v50 pulls both low, lets the rails
+     *      decay, then raises them and re-issues DISPOFF/SLPOUT/DISPON;
+     *   c) INVON vs INVOFF, in case the panel's VCOM polarity is set the
+     *      other way round and every grey level lands on black.
+     *
+     * Then six slow 8 s windows so a working panel is impossible to miss.
+     * ------------------------------------------------------------------ */
+    /* ==================================================================
+     * v50 诊断块：**产品固件里默认必须关掉**。
+     *
+     * 这块代码是排查"屏不发光"时写的取证脚本，它的用途已经完成了
+     * （结论见 docs/黑屏结论_v50.md：把整屏 ALLPON 拉亮、面板 RDDIM(0Dh)
+     * 也确认 latch 住了 "all pixels on"，但就是不发光 —— 说明没有发光电流，
+     * 是模组/供电侧的事，不是固件能改的）。
+     *
+     * 留在产品固件里的代价非常大，而且表现极具误导性：
+     *   1) 它跑在 LCD_Drv_Init() 里，而 lcddev_register()/dev/lcd0 在 Init()
+     *      **之后**才执行。六个 8 秒窗口 = 开机后 50 多秒内 /dev/lcd0 不存在
+     *      —— 界面线程（mianyu_hal_vela.c 里死等 /dev/lcd0）只能干等，
+     *      屏上这一分多钟只有测试色在闪。用户看到的就是"开机一直黑"。
+     *   2) 它会把 VADD_EN(PA37) 和背光(PA01) 拉低再做"冷上电"，等于每次
+     *      开机都拿屏的电轨做一次扰动。
+     *   3) 它会把整屏 ALLPON（全白）闪六次 —— 屏要是好的，开机先白闪一分钟，
+     *      看起来完全像故障。
+     *
+     * 需要复现取证时打开 CONFIG_MIANYU_LCD_V50_SELFTEST 再编。 */
+#ifdef CONFIG_MIANYU_LCD_V50_SELFTEST
     {
-        /* Panel bring-up test.
-         *
-         * This module is an AMOLED panel: it emits its own light, so the
-         * PA01 PWM the pinmux calls "backlight" is not what makes it
-         * visible, and brightness is programmed through register 0x51.
-         * More importantly, an AMOLED that has been sent commands but no
-         * pixel data shows black - which is exactly what the driver did up
-         * to this point, so a black screen carries no fault information.
-         *
-         * The two tests below split the link in half:
-         *
-         *   A) 0x23 / 0x22  ALL_PIXEL_ON / ALL_PIXEL_OFF
-         *      Panel-side hardware commands.  They need no GRAM writes and
-         *      no address window, so they exercise the command channel
-         *      alone.  Colour appears => commands reach the panel.
-         *
-         *   B) full-screen GRAM fill
-         *      Adds the bulk data channel on top of A.
-         *
-         * A fails            -> the QSPI write never lands (supply, reset,
-         *                       pin mux or the FPC itself)
-         * A works, B fails   -> commands land but pixel data does not
-         *                       (sync / timing / bandwidth)
-         * both work          -> panel and display link are fine, the fault
-         *                       is above the driver (fb, LVGL, app)
-         */
-        static const uint8_t ramp[4][3] =
+        uint32_t v;
+        int      i;
+
+        /* ---- a) panel self-diagnostic --------------------------------- */
+        v = LCD_ReadData(hlcdc, 0x0F, 1);
+        syslog(LOG_ERR, "[v50][a] RDDSC(0Fh)=0x%02lx checksum_comp=%lu "
+                        "(0 = panel reports itself OK)\n",
+               (unsigned long)v, (unsigned long)(v & 1));
+        syslog(LOG_ERR, "[v50][a] rail readbacks: PA10 (LCD Power En)=%d "
+                        "PA37 (VADD_EN)=%d PA01 (BL)=%d\n",
+               (int)HAL_GPIO_ReadPin(hwp_gpio1, 10),
+               (int)HAL_GPIO_ReadPin(hwp_gpio1, 37),
+               (int)HAL_GPIO_ReadPin(hwp_gpio1, 1));
+
+        /* ---- b) cold power-on order ----------------------------------- */
+        syslog(LOG_ERR, "[v50][b] cold power order: VADD_EN(PA37)=0 "
+                        "BL(PA01)=0 -> 60ms -> both HIGH -> 120ms -> "
+                        "DISPOFF/SLPOUT/DISPON\n");
+        co5300_vadd_pin(0);
+        co5300_bl_pin(0);
+        LCD_DRIVER_DELAY_MS(60);
+        co5300_vadd_pin(1);
+        co5300_bl_pin(1);
+        LCD_DRIVER_DELAY_MS(120);
+        LCD_WriteReg(hlcdc, 0x28, (uint8_t *)NULL, 0);           /* DISPOFF */
+        LCD_DRIVER_DELAY_MS(20);
+        LCD_WriteReg(hlcdc, REG_SLEEP_OUT, (uint8_t *)NULL, 0);  /* SLPOUT */
+        LCD_DRIVER_DELAY_MS(130);
+        LCD_WriteReg(hlcdc, REG_DISPLAY_ON, (uint8_t *)NULL, 0); /* DISPON */
+        LCD_DRIVER_DELAY_MS(60);
+
+        /* ---- c) six slow windows, alternating inversion --------------- */
+        for (i = 0; i < 6; i++)
         {
-            { 255, 255, 255 },  /* white */
-            { 255,   0,   0 },  /* red   */
-            {   0, 255,   0 },  /* green */
-            {   0,   0, 255 },  /* blue  */
-        };
-        uint8_t maxb = (uint8_t)REG_BRIGHTNESS_MAX;
-        int ci;
-
-        /* Make sure nothing can be blamed on a dim setting. */
-        LCD_WriteReg(hlcdc, REG_WBRIGHT, &maxb, 1);
-        syslog(LOG_ERR, "[co5300][selftest] brightness set to 0x%02x\n",
-               (unsigned)maxb);
-
-        /* ---- A) command-channel test: ALL_PIXEL_ON / ALL_PIXEL_OFF ---- */
-        for (ci = 0; ci < 4; ci++)
-        {
-            uint16_t c565 = (uint16_t)
-                (((ramp[ci][0] >> 3) << 11) |
-                 ((ramp[ci][1] >> 2) <<  5) |
-                  (ramp[ci][2] >> 3));
-            uint8_t  ap[2];
-
-            ap[0] = (uint8_t)(c565 >> 8);
-            ap[1] = (uint8_t)(c565 & 0xFF);
-
-            syslog(LOG_ERR,
-                   "[co5300][cmdtest] ALL_PIXEL_ON RGB(%u,%u,%u) 565=0x%04x\n",
-                   (unsigned)ramp[ci][0], (unsigned)ramp[ci][1],
-                   (unsigned)ramp[ci][2], (unsigned)c565);
-
-            LCD_WriteReg(hlcdc, REG_ALL_PIXEL_ON, ap, 2);
-            LCD_DRIVER_DELAY_MS(700);
-
-            LCD_WriteReg(hlcdc, REG_ALL_PIXEL_OFF, (uint8_t *)NULL, 0);
-            LCD_DRIVER_DELAY_MS(300);
-        }
-
-        syslog(LOG_ERR, "[co5300][cmdtest] done\n");
-
-        /* ---- B) data-channel test: full-screen GRAM fill ---- */
-        for (ci = 0; ci < 4; ci++)
-        {
-            syslog(LOG_ERR,
-                   "[co5300][selftest] GRAM fill RGB(%u,%u,%u)\n",
-                   (unsigned)ramp[ci][0], (unsigned)ramp[ci][1],
-                   (unsigned)ramp[ci][2]);
-
-            HAL_LCDC_LayerDisable(hlcdc, HAL_LCDC_LAYER_DEFAULT);
-            HAL_LCDC_SetBgColor(hlcdc, ramp[ci][0], ramp[ci][1], ramp[ci][2]);
-            LCD_SetRegion(hlcdc, 0, 0,
-                          LCD_PIXEL_WIDTH - 1, LCD_PIXEL_HEIGHT - 1);
-            HAL_LCDC_SendLayerData2Reg(
-                hlcdc, ((0x32 << 24) | (REG_WRITE_RAM << 8)), 4);
-            HAL_LCDC_LayerEnable(hlcdc, HAL_LCDC_LAYER_DEFAULT);
-
-            LCD_DRIVER_DELAY_MS(700);
-        }
-
-        /* ---- C) read the panel back ------------------------------------
-         *
-         * Everything above is write-only, and a write the panel never
-         * latched looks exactly like one that worked.  The driver's QSPI
-         * read path is already proven by the ReadID at the top of init, so
-         * whatever comes back here comes back from the panel itself.
-         */
-        {
-            /* The byte layout HAL_LCDC_ReadDatas() uses for short reads is
-             * not documented in this tree - the body lives in ROM
-             * (__HAL_ROM_USED).  It decides how every read has to be
-             * interpreted:
-             *
-             *   MSB-first      first byte read sits at bits 31:24
-             *   right-aligned  first byte read sits at bits  7:0
-             *
-             * The 3-byte ReadID at the top of init returns 0x00331100, which
-             * fits both readings, so probe one register at four lengths and
-             * let the numbers decide instead of guessing.
-             */
-            uint32_t id1 = LCD_ReadData(hlcdc, REG_LCD_ID, 1);
-            uint32_t id2 = LCD_ReadData(hlcdc, REG_LCD_ID, 2);
-            uint32_t id3 = LCD_ReadData(hlcdc, REG_LCD_ID, 3);
-            uint32_t id4 = LCD_ReadData(hlcdc, REG_LCD_ID, 4);
-
-            uint32_t r0a = LCD_ReadData(hlcdc, REG_POWER_MODE,      1);
-            uint32_t r0b = LCD_ReadData(hlcdc, 0x0B,                1);
-            uint32_t r0c = LCD_ReadData(hlcdc, 0x0C,                1);
-            uint32_t r0d = LCD_ReadData(hlcdc, 0x0D,                1);
-            uint32_t r0e = LCD_ReadData(hlcdc, 0x0E,                1);
-            uint32_t r0f = LCD_ReadData(hlcdc, 0x0F,                1);
-            uint32_t r3a = LCD_ReadData(hlcdc, REG_COLOR_MODE,      1);
-            uint32_t r52 = LCD_ReadData(hlcdc, REG_RBRIGHT,         1);
-
-            syslog(LOG_ERR,
-                   "[co5300][probe] ID len1=0x%08x len2=0x%08x "
-                   "len3=0x%08x len4=0x%08x\n",
-                   (unsigned)id1, (unsigned)id2,
-                   (unsigned)id3, (unsigned)id4);
-            syslog(LOG_ERR,
-                   "[co5300][probe] 0x0A=0x%08x 0x0B=0x%08x "
-                   "0x0C=0x%08x 0x0D=0x%08x\n",
-                   (unsigned)r0a, (unsigned)r0b,
-                   (unsigned)r0c, (unsigned)r0d);
-            syslog(LOG_ERR,
-                   "[co5300][probe] 0x0E=0x%08x 0x0F=0x%08x "
-                   "0x3A=0x%08x 0x52=0x%08x\n",
-                   (unsigned)r0e, (unsigned)r0f,
-                   (unsigned)r3a, (unsigned)r52);
-
-            /* Magenta 0xF81F: neither byte is 0x00 or 0xFF, so reading blank
-             * GRAM (0x0000 / 0xFFFF) can never fake a hit. */
-            HAL_LCDC_LayerDisable(hlcdc, HAL_LCDC_LAYER_DEFAULT);
-            HAL_LCDC_SetBgColor(hlcdc, 255, 0, 255);
-            LCD_SetRegion(hlcdc, 0, 0,
-                          LCD_PIXEL_WIDTH - 1, LCD_PIXEL_HEIGHT - 1);
-            HAL_LCDC_SendLayerData2Reg(
-                hlcdc, ((0x32 << 24) | (REG_WRITE_RAM << 8)), 4);
-            HAL_LCDC_LayerEnable(hlcdc, HAL_LCDC_LAYER_DEFAULT);
-            LCD_DRIVER_DELAY_MS(200);
-
+            if (i & 1)
             {
-                uint32_t ram4 = LCD_ReadData(hlcdc, REG_READ_RAM, 4);
-                uint32_t ram2 = LCD_ReadData(hlcdc, REG_READ_RAM, 2);
-                uint32_t idag = LCD_ReadData(hlcdc, REG_LCD_ID, 3);
-                uint8_t  b0 = (uint8_t)((ram4 >> 24) & 0xFFu);
-                uint8_t  b1 = (uint8_t)((ram4 >> 16) & 0xFFu);
-                uint8_t  b2 = (uint8_t)((ram4 >>  8) & 0xFFu);
-                uint8_t  b3 = (uint8_t)( ram4         & 0xFFu);
-                int      hit;
-
-                /* Byte-order independent: a 2-byte read of solid magenta is
-                 * exactly the colour, in one order or the other. */
-                hit = (ram2 == 0x0000F81Fu || ram2 == 0xF81F0000u);
-
-                /* ... and in the 4-byte read, F8/1F must appear adjacent. */
-                if (!hit)
-                {
-                    hit = ((b0 == 0xF8 && b1 == 0x1F) ||
-                           (b1 == 0xF8 && b2 == 0x1F) ||
-                           (b2 == 0xF8 && b3 == 0x1F) ||
-                           (b0 == 0x1F && b1 == 0xF8) ||
-                           (b1 == 0x1F && b2 == 0xF8) ||
-                           (b2 == 0x1F && b3 == 0xF8));
-                }
-
-                syslog(LOG_ERR,
-                       "[co5300][probe] after magenta fill: "
-                       "GRAM len4=0x%08x len2=0x%08x | ID(again) len3=0x%08x\n",
-                       (unsigned)ram4, (unsigned)ram2, (unsigned)idag);
-
-                syslog(LOG_ERR,
-                       "[co5300][readback] GRAM(0x2E)=%02x %02x %02x %02x "
-                       "-> %s\n",
-                       (unsigned)b0, (unsigned)b1, (unsigned)b2, (unsigned)b3,
-                       hit
-                       ? "MATCH -> magenta reached panel GRAM, data path OK"
-                       : "NO MATCH -> pixel data is not landing (QSPI write/mode)");
+                LCD_WriteReg(hlcdc, 0x21, (uint8_t *)NULL, 0);   /* INVON */
             }
+            else
+            {
+                LCD_WriteReg(hlcdc, 0x20, (uint8_t *)NULL, 0);   /* INVOFF */
+            }
+
+            syslog(LOG_ERR, "[v50][W%d] ALLPON 8000ms with INVON=%d - "
+                            "screen MUST be WHITE now\n", i, i & 1);
+            co5300_bl_pin(1);
+            LCD_WriteReg(hlcdc, 0x23, (uint8_t *)NULL, 0);       /* ALLPON */
+            LCD_DRIVER_DELAY_MS(8000);
+            LCD_WriteReg(hlcdc, 0x22, (uint8_t *)NULL, 0);       /* ALLPOFF */
+            LCD_DRIVER_DELAY_MS(1000);
         }
 
-        syslog(LOG_ERR, "[co5300][selftest] both tests done\n");
+        /* ---- hand a sane state back to the application ---------------- */
+        LCD_WriteReg(hlcdc, 0x20, (uint8_t *)NULL, 0);           /* INVOFF */
+        co5300_vadd_pin(1);
+        co5300_bl_pin(1);
+        syslog(LOG_ERR, "[v50] sequence finished, panel left on normal "
+                        "display with inversion off\n");
     }
-
+#endif /* CONFIG_MIANYU_LCD_V50_SELFTEST */
 }
 
 
@@ -667,8 +625,8 @@ static void LCD_WriteReg(LCDC_HandleTypeDef *hlcdc, uint16_t LCD_Reg, uint8_t *P
 
     if (status != HAL_OK)
     {
-        syslog(LOG_ERR, "[co5300][diag] WriteReg failed reg=0x%02x len=%lu st=%d\n",
-               LCD_Reg, (unsigned long)NbParameters, status);
+        lcdwarn("[co5300] WriteReg failed reg=0x%02x len=%lu st=%d",
+                LCD_Reg, (unsigned long)NbParameters, status);
     }
 
 }
@@ -828,121 +786,3 @@ LCD_DRIVER_EXPORT(co5300, LCD_ID, &lcdc_int_cfg,
                   LCD_PIXEL_WIDTH,
                   LCD_PIXEL_HEIGHT,
                   2);
-
-
-/* ---------------------------------------------------------------------------
- * Bring-up aid: visual colour cycle.
- *
- * The init-time test above lasts about seven seconds, which is easy to miss.
- * This runs as its own thread and repaints the whole panel once a second for
- * CO5300_VISUAL_CYCLES iterations, so the question "does this panel emit any
- * light at all?" can be answered at leisure - by eye or with a camera.
- *
- * It stops by itself and settles on solid white, so it will not fight a real
- * UI once one exists (delete the task_create in sf32lb_lcd.c at that point).
- *
- * The layer is disabled around each fill on purpose: the LCDC is never
- * started for continuous scan in this build, so GRAM keeps whatever was
- * written last and the colour stays on screen until the next write.
- * ------------------------------------------------------------------------- */
-#define CO5300_VISUAL_CYCLES 240
-#define CO5300_ROUNDS        10   /* 10 轮 x 24 s = 240 s */
-
-/* One full-screen fill, using the vendor's own clear-screen recipe
- * (LCD_Clear in this file) so the bring-up test exercises the same path the
- * panel driver itself trusts. */
-static void co5300_fill(LCDC_HandleTypeDef *hlcdc,
-                        uint8_t r, uint8_t g, uint8_t b)
-{
-    HAL_LCDC_Next_Frame_TE(hlcdc, 0);
-    LCD_SetRegion(hlcdc, 0, 0, LCD_PIXEL_WIDTH - 1, LCD_PIXEL_HEIGHT - 1);
-    HAL_LCDC_LayerSetFormat(hlcdc, HAL_LCDC_LAYER_DEFAULT,
-                            LCDC_PIXEL_FORMAT_RGB565);
-    HAL_LCDC_LayerDisable(hlcdc, HAL_LCDC_LAYER_DEFAULT);
-    HAL_LCDC_SetBgColor(hlcdc, r, g, b);
-    HAL_LCDC_SendLayerData2Reg(
-        hlcdc, ((0x32 << 24) | (REG_WRITE_RAM << 8)), 4);
-    HAL_LCDC_LayerEnable(hlcdc, HAL_LCDC_LAYER_DEFAULT);
-}
-
-/* ---------------------------------------------------------------------------
- * Bring-up aid: three-stage visual test.
- *
- * Each stage isolates one layer of the display chain, so a single look at the
- * panel says where it breaks:
- *
- *   A  display off/on blink          0x28 / 0x29   panel lights and blanks
- *   B  ALL_PIXEL_ON / OFF            0x23 / 0x22   panel-side uniform white,
- *                                                 no pixel data involved
- *   C  full-screen colour fill       GRAM write    adds the bulk data path
- *
- * 8 s per stage, 24 s per round, 10 rounds, then it parks on solid white.
- * Runs as its own thread and stops by itself - delete the task_create in
- * sf32lb_lcd.c once a real UI paints the panel.
- * ------------------------------------------------------------------------- */
-void co5300_bringup_visual_cycle(void)
-{
-    static const uint8_t cyc[4][3] =
-    {
-        { 255, 255, 255 },  /* white   */
-        { 255,   0,   0 },  /* red     */
-        {   0, 255,   0 },  /* green   */
-        {   0,   0, 255 },  /* blue    */
-    };
-    LCDC_HandleTypeDef *hlcdc = s_diag_hlcdc;
-    int round, i;
-
-    if (hlcdc == NULL)
-    {
-        syslog(LOG_ERR, "[co5300][visual] no handle, cycle skipped\n");
-        return;
-    }
-
-    /* Let lcddev/fb registration and the second Init finish first. */
-    LCD_DRIVER_DELAY_MS(6000);
-
-    syslog(LOG_ERR,
-           "[co5300][visual] three-stage test start: A blink / B all-pixel / "
-           "C colour fill, %d rounds x 24 s\n", CO5300_ROUNDS);
-
-    for (round = 0; round < CO5300_ROUNDS; round++)
-    {
-        /* ---- A: display off / on (8 s at 2 Hz) ---- */
-        syslog(LOG_ERR,
-               "[co5300][visual] round %d STAGE A: 0x28/0x29 display blink 8 s\n",
-               round);
-        for (i = 0; i < 16; i++)
-        {
-            LCD_WriteReg(hlcdc, REG_DISPLAY_OFF, (uint8_t *)NULL, 0);
-            LCD_DRIVER_DELAY_MS(250);
-            LCD_WriteReg(hlcdc, REG_DISPLAY_ON, (uint8_t *)NULL, 0);
-            LCD_DRIVER_DELAY_MS(250);
-        }
-
-        /* ---- B: panel-side all pixels on / off (8 s) ---- */
-        syslog(LOG_ERR,
-               "[co5300][visual] round %d STAGE B: 0x23 ALL_PIXEL_ON white 8 s\n",
-               round);
-        for (i = 0; i < 8; i++)
-        {
-            LCD_WriteReg(hlcdc, REG_ALL_PIXEL_ON, (uint8_t *)NULL, 0);
-            LCD_DRIVER_DELAY_MS(700);
-            LCD_WriteReg(hlcdc, REG_ALL_PIXEL_OFF, (uint8_t *)NULL, 0);
-            LCD_DRIVER_DELAY_MS(300);
-        }
-
-        /* ---- C: full-screen colour fill (8 s) ---- */
-        syslog(LOG_ERR,
-               "[co5300][visual] round %d STAGE C: GRAM fill 8 s\n", round);
-        for (i = 0; i < 4; i++)
-        {
-            co5300_fill(hlcdc, cyc[i][0], cyc[i][1], cyc[i][2]);
-            LCD_DRIVER_DELAY_MS(2000);
-        }
-    }
-
-    /* Park on solid white: unambiguous, and obviously not "black". */
-    co5300_fill(hlcdc, 255, 255, 255);
-    syslog(LOG_ERR,
-           "[co5300][visual] test finished, parked on solid white\n");
-}
