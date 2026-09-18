@@ -46,6 +46,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <syslog.h>
+#include <sys/time.h>
 
 #include <nuttx/arch.h>
 #include <nuttx/clock.h>
@@ -66,6 +67,13 @@
 #define VL_T_CMD            (0x04)   /* PC->板  命令 */
 #define VL_T_PING           (0x05)   /* 双向保活（板->PC 是 PONG） */
 #define VL_T_LOG            (0x06)   /* 板->PC  调试文本 */
+/* PC->板  G.711 μ-law 压缩下行（1 字节 = 1 样本）。
+ * 为什么要压缩：板子播 16kHz/16bit PCM 要 32KB/s，而这条 1Mbaud 串口链路
+ * 实测几乎没有余量（突发形态下只能收到 37% 的帧），听感就是"一卡一卡"。
+ * μ-law 把下行砍到 16KB/s，链路立刻有余量；解码是逐样本查表，无状态、
+ * 不传播错误（ADPCM 能压更小但有解码器状态，丢一帧后面全错）。
+ * 编码器（权威实现）见 voice/ulaw.py，两边必须严格一致。 */
+#define VL_T_AUDIO_ULAW     (0x07)
 
 #define VL_CMD_SET_AMP      (0x01)   /* payload[1] = 0/1 */
 #define VL_CMD_SET_VOL      (0x02)   /* payload[1] = 0..100 */
@@ -83,6 +91,23 @@
 #define VL_CMD_SET_BREATHE  (0x08)   /* [0x08, inhale(2), hold(2), exhale(2), peak(1)] */
 #define VL_CMD_SET_HALO     (0x09)   /* [0x09, peak%] 只改光晕峰值 */
 #define VL_CMD_LIGHT_ONOFF  (0x0A)   /* [0x0A, on] 开/关灯 */
+
+/* 语音状态（附加 1 的下行端）：[0x0B, state]
+ *   0=空闲 1=在听 2=在想 3=在说
+ *
+ * 为什么由 PC 下发而不是板子自己猜：板子只能看到"串口上有没有音频在流"，
+ * 分不出"用户在说话"和"AI 在说话"（两者都是音频），更看不出"在想"（那是
+ * PC 侧模型在算，串口上什么都看不到）。谁是大脑谁负责报状态 —— 和后面
+ * VL_EV_SLEEP_STATE 的上报方向正好对称。
+ * 界面上要用它显示"设备现在在干什么"，这是"能互动"的关键一半：
+ * 屏幕上看得见它在听你说。 */
+#define VL_CMD_UI_STATE     (0x0B)
+
+/* 校时（附加 1 的下行端）：[0x0C, year-2000, month, day, hour, minute, second]
+ * 板子上没有 RTC 电池，开机时钟是 1970 或构建时刻，表盘上的日期时间必然是错的。
+ * 由 PC 在连接时校一次、之后每 60 秒纠一次（板子重启也能自动纠回来）。
+ * 必须与 voice/board_link.py 的 CMD_SET_TIME 一致。 */
+#define VL_CMD_SET_TIME     (0x0C)
 
 /* 下行指令种类编号 —— 必须与 app 侧 my_rcmd_kind_t 的取值一致
  * （HAL 之间用 int 传，不做类型耦合，所以两边的数字要对得上）。 */
@@ -122,7 +147,32 @@
 static int               g_fd = -1;
 static volatile int      g_mic_up = 1;      /* 上行开关（CMD_SET_MIC 控） */
 static volatile int      g_down_on = 1;     /* 下行接收开关（CMD_SET_DOWNLINK 控） */
+static volatile int      g_ui_state;        /* 语音状态，给界面显示（CMD_UI_STATE 控） */
+
+/* G.711 μ-law -> int16 解码表。开机算一次（256 项，纯位运算），
+ * 不写成一大坨常量字面量 —— 手抄 256 个数正是最容易出错的地方。
+ * 公式与 voice/ulaw.py 的 ulaw2lin 严格一致（那边是权威实现）：
+ *   v = ~u; t = ((v & 0x0F) << 3) + 0x84; t <<= (v & 0x70) >> 4;
+ *   out = (v & 0x80) ? (0x84 - t) : (t - 0x84);                       */
+static int16_t           g_ulaw2lin[256];
+
+static void vl_build_ulaw_table(void)
+{
+  int u;
+
+  for (u = 0; u < 256; u++)
+    {
+      int v = (~u) & 0xFF;
+      int t = ((v & 0x0F) << 3) + 0x84;
+
+      t <<= (v & 0x70) >> 4;
+      g_ulaw2lin[u] = (int16_t)((v & 0x80) ? (0x84 - t) : (t - 0x84));
+    }
+}
 static uint8_t           g_tx_seq;
+/* 最近一次收到下行音频的时刻（tick）。上行"放音期间自动静音"就靠它判：
+ * 判据是"PC 最近还在给我送音频吗"，本地事实、无状态、不可能卡住。 */
+static volatile uint32_t g_last_dl_tick;
 static volatile uint32_t g_up_frames;       /* 上行帧数（诊断） */
 static volatile uint32_t g_down_frames;     /* 下行帧数（诊断） */
 static uint32_t          g_crc_err;         /* CRC 错计数 */
@@ -181,6 +231,8 @@ extern void bsp_audio_set_amp(int on);
 extern void bsp_audio_set_volume_pct(int pct);
 extern int  bsp_audio_mic_read(int16_t *dst, int max);
 extern void bsp_audio_mic_stats(uint32_t *ht, uint32_t *tc);
+extern int  bsp_audio_volume_pct(void);
+extern int  bsp_audio_mic_gain_status(void);
 extern int  bsp_audio_loopback(int pa_on, int nwin,
                                uint32_t *off_1k, uint32_t *on_1k,
                                uint32_t *off_ref, uint32_t *on_ref,
@@ -188,15 +240,45 @@ extern int  bsp_audio_loopback(int pa_on, int nwin,
 
 /* ------------------------------------------------------------------------- */
 
+/* vllog 走 T_LOG 帧发日志，所以要先声明（定义在后面）。 */
+static void vl_send_log(const char *text);
+
 static void vllog(const char *fmt, ...)
 {
+  static const char tag[] = "[vlink] ";
   char msg[160];
   va_list ap;
 
   va_start(ap, fmt);
   vsnprintf(msg, sizeof(msg), fmt, ap);
   va_end(ap);
-  syslog(LOG_INFO, "[vlink] %s\n", msg);
+
+  /* 走 T_LOG 帧，**不要用 syslog**。
+   *
+   * 理由：syslog 写到 /dev/console，而 /dev/console 就是本链路独占的
+   * UART1（见本目录 README 的"硬件通路"），于是每 500ms 一行状态文本
+   * 就直接插进二进制帧流里，上位机解析器每插一行就得重新找同步头。
+   * PC 侧在 COM3 原样抓 6 秒实测：24 次重同步（4 次/秒），文本本身还
+   * 占掉 0.8% 的链路带宽。这也正是 patch_vlink_quiet.sh 里"验证界面时
+   * 干脆把整条链路关掉"的根因 —— 现在不用关链路了。
+   *
+   * 走帧发过去，上位机一样看得到这些日志（网关打成 [board] 并保留
+   * "[vlink]" 前缀），而且有边界、可校验。板子的心脏指标（HT/TC 采集
+   * 计数、待放= 播放缓冲水位、丢帧数）也就自动进了上位机日志 ——
+   * 这几个数正是判断"音频顺不顺、采集有没有在跑"的依据。
+   *
+   * g_fd < 0 时（链路还没建起来）退回 syslog，免得启动早期的日志丢掉。 */
+  if (g_fd >= 0)
+    {
+      char line[sizeof(msg) + sizeof(tag)];
+
+      snprintf(line, sizeof(line), "%s%s", tag, msg);
+      vl_send_log(line);
+    }
+  else
+    {
+      syslog(LOG_INFO, "%s%s\n", tag, msg);
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -477,6 +559,39 @@ static void vl_on_frame(uint8_t type, uint8_t flags, uint8_t seq,
 
   switch (type)
     {
+      case VL_T_AUDIO_ULAW:
+        {
+          /* μ-law 压缩下行：1 字节 -> 1 个 16bit 样本。
+           * 分块展开（128 样本一块 = 256 字节栈），不一次摊开整帧 —— 一帧最多
+           * 1024 字节，摊开就是 2KB 栈，这条任务栈不大，不值得冒那个险。
+           * 解码是纯查表：无状态、丢帧不会连累后面的帧。 */
+          int i;
+
+          if (g_down_on && len > 0)
+            {
+              const uint8_t *src = pl;
+              int16_t        buf[128];
+              int            left = len;
+
+              while (left > 0)
+                {
+                  int n = (left > 128) ? 128 : left;
+
+                  for (i = 0; i < n; i++)
+                    {
+                      buf[i] = g_ulaw2lin[src[i]];
+                    }
+
+                  (void)bsp_audio_play_pcm(buf, n);
+                  src  += n;
+                  left -= n;
+                }
+              g_down_frames++;
+              g_last_dl_tick = (uint32_t)clock_systime_ticks();
+            }
+        }
+        break;
+
       case VL_T_AUDIO_DOWN:
         {
           /* 下行 PCM：直接推给放音环形缓冲。
@@ -488,6 +603,7 @@ static void vl_on_frame(uint8_t type, uint8_t flags, uint8_t seq,
               int wrote = bsp_audio_play_pcm((const int16_t *)pl, samples / 2);
 
               g_down_frames++;
+              g_last_dl_tick = (uint32_t)clock_systime_ticks();
 
               if (wrote < samples / 2)
                 {
@@ -544,6 +660,58 @@ static void vl_on_frame(uint8_t type, uint8_t flags, uint8_t seq,
               case VL_CMD_SET_DOWNLINK:
                 g_down_on = arg ? 1 : 0;
                 vllog("CMD 下行接收 -> %s", arg ? "开" : "关");
+                break;
+
+              case VL_CMD_UI_STATE:
+                /* 只存起来给界面读，不刷日志：这个状态每次开口/回话都会变，
+                 * 打日志会把 [vlink] 的周期状态淹掉（那是排查链路用的）。 */
+                g_ui_state = (arg > 3) ? 0 : arg;
+                break;
+
+              case VL_CMD_SET_TIME:
+                /* 校时。板子上没有 RTC 电池，开机时钟是 1970 或构建时刻，
+                 * 表盘上的日期时间必然是错的 —— 只能由 PC 在连上时校一次。
+                 *
+                 * 收的是"年月日时分秒"而不是 epoch，**刻意不碰时区**：
+                 * 把 PC 的本地时间当成 UTC 塞进系统时钟，`localtime()` 读回来
+                 * 就正好是 PC 上那几个数，和板子有没有 TZ 数据无关。
+                 * （发 epoch 的话还得让两边时区一致，板子这边不一定有。）
+                 *
+                 * epoch 直接用历法公式算，不走 mktime —— mktime 会按本地时区
+                 * 解释，绕回时区问题里去了。 */
+                if (len >= 7)
+                  {
+                    int yy = 2000 + pl[1];
+                    int mm = pl[2], dd = pl[3];
+                    int hh = pl[4], mi = pl[5], ss = pl[6];
+                    long days;
+                    struct timeval tv;
+
+                    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31
+                        && hh < 24 && mi < 60 && ss < 60)
+                      {
+                        /* days_from_civil（Howard Hinnant）：与 libc 无关，
+                         * 纯整数运算，1970-01-01 起算 */
+                        int  y  = yy - (mm <= 2);
+                        long era = (y >= 0 ? y : y - 399) / 400;
+                        unsigned yoe = (unsigned)(y - era * 400);
+                        unsigned doy = (unsigned)((153 * (mm + (mm > 2 ? -3 : 9)) + 2) / 5 + dd - 1);
+                        unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+
+                        days = era * 146097L + (long)doe - 719468L;
+                        tv.tv_sec  = days * 86400L + hh * 3600L + mi * 60L + ss;
+                        tv.tv_usec = 0;
+                        if (settimeofday(&tv, NULL) == 0)
+                          {
+                            vllog("校时 %04d-%02d-%02d %02d:%02d:%02d （来自 PC）",
+                                  yy, mm, dd, hh, mi, ss);
+                          }
+                        else
+                          {
+                            vllog("校时失败：settimeofday errno=%d", errno);
+                          }
+                      }
+                  }
                 break;
 
               case VL_CMD_LOOPBACK:
@@ -995,6 +1163,66 @@ static int vl_uplink_pump(int16_t *buf, int *fill, int enable)
   return sent;
 }
 
+/* 上行到底该不该开。**放音期间板子自己关掉，不依赖 PC 的命令。**
+ *
+ * 判据是"**最近有没有收到下行音频**"，而不是别的两个候选：
+ *
+ *   · 不能用 PC 的 CMD_SET_MIC 0：那条命令是一帧，混在下行音频洪流里会丢
+ *     （实测 CRC 错约 1 次/秒），丢了就永远丢了 —— 麦克风在播报期间一直开着，
+ *     把喇叭自己的声音收回去，VAD 判成"用户在说话"，AI 打断自己。
+ *   · 也不能用播放环的深度：环被欠载抽空时会误判成"放音结束"而重新开麦，
+ *     30KB/s 的上行把链路带宽吃掉一半、下行更供不上、环更空 —— 一旦开始卡
+ *     就再也回不来（实测的死循环）。
+ *   · 更不能用 g_play_type == AUD_PCM：它是**黏的**，放完没人发停播命令就
+ *     一直停在 PCM，上行会被永久静音（实测：上行帧计数卡死不动）。
+ *
+ * 而"刚收到过下行音频"是**本地事实、无状态、不可能卡住**：PC 一停发，
+ * 200ms 后上行就自动回来。 */
+#define VL_DL_QUIET_TICKS  (20)      /* 20 tick ≈ 200ms（tick 是 10ms） */
+
+static int vl_uplink_enabled(void)
+{
+  static int last_on = -1;
+  uint32_t   now = (uint32_t)clock_systime_ticks();
+  int        playing;
+  int        on;
+
+  /* 两个条件"或"起来才算还在放音：
+   *   ① 最近收到过下行音频（PC 还在给我送）；
+   *   ② 播放环里还有货（还没放完）。
+   * 只用 ①：下行偶尔断 200ms 就会让麦克风中途误开一下，把喇叭自己的声音
+   * 收回去（实测日志里看到 1 秒之内"自动恢复"又"自动静音"各一次）。
+   * 只用 ②：环被欠载抽空时会误判成放完，回到那个死循环。
+   * 两个一起用还有个关键性质 —— **不可能永久静音**：PC 只要停发 ≥200ms
+   * 且环已排空，上行立刻回来（g_play_type 那种"黏住"的写法就踩过这个坑）。 */
+  playing = (((g_last_dl_tick != 0) && ((now - g_last_dl_tick) < VL_DL_QUIET_TICKS))
+             || (bsp_audio_play_pending() > 0));
+
+  if (!g_mic_up || g_shell_mode)
+    {
+      on = 0;
+    }
+  else
+    {
+      on = playing ? 0 : 1;
+    }
+
+  if (on != last_on)
+    {
+      last_on = on;
+      if (on)
+        {
+          vllog("放音结束，上行麦克风自动恢复");
+        }
+      else if (g_mic_up)
+        {
+          vllog("放音中，上行麦克风自动静音（避免把喇叭的声音收回去，也让开下行带宽）");
+        }
+    }
+
+  return on;
+}
+
 static void vl_thread(void)
 {
   /* 上行累积缓冲必须是**跨循环保持**的。为什么要累积而不是"读一次就发"：
@@ -1040,13 +1268,42 @@ static void vl_thread(void)
   vllog("语音链路已建立：%s，上行 %d 样本/帧，协议 A5 5A + CRC16-CCITT",
         VL_UART_DEV, VL_UP_SAMPLES);
 
+  /* μ-law 解码表（下行压缩用）。放在这里建：一次 256 次位运算，
+   * 之后每一帧下行都只是查表。 */
+  vl_build_ulaw_table();
+  vllog("μ-law 下行解码表就绪（256 项），下行带宽 16KB/s");
+
   /* 开机事件 + 一句日志，让上位机一眼确认"板子活了、版本对了" */
   {
-    uint8_t ev = VL_EV_BOOT_READY;
+    uint8_t ev  = VL_EV_BOOT_READY;
+    int     gs  = bsp_audio_mic_gain_status();
+    int     gok = (gs >> 16) & 0xFFFF;
+    int     gdb = (int)(int16_t)(gs & 0xFFFF);
+    char    line[160];
 
     vl_send(VL_T_EVENT, &ev, 1, 0);
     vl_send_log("board ready: SF32LB52-DevKit-LCD, 16kHz/16bit/mono, DAC+ADC running");
     vl_send_log("无 nsh 控制台（init=mianyu_main）。要 shell 请发 CMD 0x10。");
+
+    /* 采集增益是**配置结果**，不是"我们打算设的值"。这一条必须报给上位机：
+     * 这个 HAL 在参数超范围时会静默返回错误、寄存器一个字节都不写，增益
+     * 停在默认 0dB —— 现象和"麦克风没开"一模一样，靠听感和日志都分不出来。
+     * 曾把 24 改成 36（这颗芯片上限 30）本意是抬增益，实际压低 24dB，
+     * 白绕了两个小时。 */
+    if (gok)
+      {
+        snprintf(line, sizeof(line),
+                 "采集增益 %+d dB 已生效；放音音量 %d%%（上位机可按此值推算电平）",
+                 gdb, bsp_audio_volume_pct());
+      }
+    else
+      {
+        snprintf(line, sizeof(line),
+                 "严重：采集增益 %+d dB 未生效（HAL 拒绝），"
+                 "当前实际是默认 0dB，麦克风会很轻", gdb);
+      }
+
+    vl_send_log(line);
   }
 
   for (;;)
@@ -1071,7 +1328,7 @@ static void vl_thread(void)
         }
 
       /* ---- 2) 上行：把这一个 tick 里攒下的整帧全部发出去 ---- */
-      vl_uplink_pump(up, &up_fill, g_mic_up);
+      vl_uplink_pump(up, &up_fill, vl_uplink_enabled());
 
       /* ---- 2′) 代发别的线程（app 主循环）托过来的事件 ----
        * 走这里而不是让 app 直接调 vl_send：组帧（g_tx_seq）和写串口都得是
@@ -1100,15 +1357,28 @@ static void vl_thread(void)
             bsp_audio_mic_stats(&ht, &tc);
 
             /* 采集侧到底有没有在跑：HT/TC 不涨就说明 ADC 侧断了。
-             * tx_short 是"没写完整的帧"数 —— 它一直涨就说明串口在丢。 */
+             * tx_short 是"没写完整的帧"数 —— 它一直涨就说明串口在丢。
+             *
+             * 另外把**屏幕三个使能脚的实际电平**一起报上来：
+             *   PA10 = 屏幕电源使能（和功放使能共用同一条网！见 bsp_pinmux.c
+             *          的 BSP_PIN_LCD 与 bsp_audio_test.c 的 AUD_PA_PIN）
+             *   PA37 = LCD_VADD_EN（模组模拟电轨）
+             *   PA01 = 背光
+             * 这三个脚是"屏黑但软件一切正常"时唯一能从软件侧拿到的事实。
+             * 只要 PA10=0，屏幕电轨就是断的，屏必黑 —— 而且没有任何路径会
+             * 重做面板上电，只能重启。以前这条只能靠猜，现在每 500ms 看得见。 */
             vllog("上行 %u 帧 下行 %u 帧 | 麦克风 HT=%u TC=%u(Δ%u) | 待放=%d 样本"
-                  " | TX %u 字节 丢帧 %u | CRC错=%u 重同步=%u | cfg=%s%s",
+                  " | TX %u 字节 丢帧 %u | CRC错=%u 重同步=%u | 屏脚 PA10=%d PA37=%d PA01=%d"
+                  " | cfg=%s%s",
                   (unsigned)g_up_frames, (unsigned)g_down_frames,
                   (unsigned)ht, (unsigned)tc,
                   (unsigned)(ht + tc - last_up_ht - last_up_tc),
                   bsp_audio_play_pending(),
                   (unsigned)g_tx_bytes, (unsigned)g_tx_short,
                   (unsigned)g_crc_err, (unsigned)g_resync,
+                  (int)HAL_GPIO_ReadPin(hwp_gpio1, 10),
+                  (int)HAL_GPIO_ReadPin(hwp_gpio1, 37),
+                  (int)HAL_GPIO_ReadPin(hwp_gpio1, 1),
                   g_mic_up ? "MIC-UP" : "MIC-OFF",
                   g_shell_mode ? " SHELL" : "");
 
@@ -1142,6 +1412,16 @@ int bsp_voice_link_send_sleep_state(int state, int conf_pct, int resp_bpm)
   g_ev_body[2] = (uint8_t)(resp_bpm < 0 ? 0 : (resp_bpm > 255 ? 255 : resp_bpm));
   g_ev_pending = 1;
   return 0;
+}
+
+/* 界面读：当前语音状态（0=空闲 1=在听 2=在想 3=在说）。
+ *
+ * 主循环每 100ms 读一次塞进界面快照。这里只做一个 volatile int 的读，
+ * 不加锁：单核、字长对齐，读到上一拍的值也能接受（状态变化是秒级的，
+ * 界面上差 100ms 完全看不出来）。 */
+int bsp_voice_link_ui_state(void)
+{
+  return g_ui_state;
 }
 
 /* 链路线程 → app 主循环：取一条 PC 侧 Agent 发来的下行指令（非阻塞）。

@@ -123,6 +123,11 @@ void my_hal_sleep_report(int state, int conf_pct, int resp_bpm);
 /* 取一条 PC 侧 Agent 发来的下行指令（非阻塞）。取到返回 true，无则 false。 */
 bool my_hal_remote_cmd_take(my_remote_cmd_t *out);
 
+/* 当前的语音状态，供界面显示"设备在干什么"：
+ *   0=空闲 1=在听(用户说话) 2=在想(等模型) 3=在说(AI 播报)
+ * 真机由网关下发（只有 PC 侧分得出这四种），模拟器恒返回 0。 */
+int my_hal_voice_state(void);
+
 /* ===================== 存储后端（注入给核心层） ===================== */
 
 /* 调度任务表后端：真机=cJSON+LittleFS，模拟器=内存。调用方用 my_sched_init 注入。 */

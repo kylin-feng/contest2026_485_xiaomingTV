@@ -58,6 +58,18 @@ CMD_LOOPBACK = 0x07     # payload[1] = 0/1 板上声学回环自检（0 = 功放
 CMD_SET_BREATHE = 0x08  # [0x08, inhale(2 LE), hold(2 LE), exhale(2 LE), peak(1)] ms / %
 CMD_SET_HALO = 0x09     # [0x09, peak%]  只改光晕峰值
 CMD_LIGHT_ONOFF = 0x0A  # [0x0A, on]     开/关灯
+# 语音状态，给界面显示"设备现在在干什么"：[0x0B, state]  0=空闲 1=在听 2=在想 3=在说
+# 为什么由 PC 报：板子只看得到"串口上有没有音频"，分不出是用户在说还是 AI 在说，
+# 更看不到"在想"（那是 PC 侧模型在算）。谁有信息谁负责报。
+CMD_UI_STATE = 0x0B
+# 校时：[0x0C, year-2000, month, day, hour, minute, second]（7 字节）
+# 板子上没有 RTC 电池，开机就是 1970（或构建时间），表盘上的日期时间必然是错的。
+# 这条命令由 PC 在连接时发一次、之后每 60 秒发一次（板子重启也能自动纠回来）。
+CMD_SET_TIME = 0x0C
+# 帧类型：G.711 μ-law 压缩下行（1 字节 = 1 样本，16KB/s）。
+# 板子播 16kHz/16bit PCM 要 32KB/s，而 1Mbaud 这条链路实测几乎没有余量；
+# μ-law 砍到 16KB/s 就有余量了。编码器见 voice/ulaw.py（权威实现）。
+T_AUDIO_ULAW = 0x07
 
 # 板子产品模式下没有交互控制台（init 入口是 mianyu_main，不是 nsh_main）——
 # 否则 nsh 会和语音链路抢同一个串口，把 PC 发下来的 PCM 吃掉（实测下行成功率 1%）。
@@ -249,6 +261,7 @@ class SerialBoardLink:
         self.ser = None
         self.parser = FrameParser()
         self.tx_seq = 0
+        self.tx_err = 0            # 串口写失败次数（只记数，不抛）
 
     @staticmethod
     def list_ports():
@@ -278,6 +291,9 @@ class SerialBoardLink:
             self.port, desc = self.autodetect()
             if self.port is None:
                 raise RuntimeError("没有找到任何串口设备：板子没插好或驱动没起来")
+        # 刻意**不设** write_timeout：设了之后串口缓冲满时 write 会抛异常，
+        # 而调用它的可能是 asyncio 里的上行循环 —— 异常一逃出去，整个 ws 会话
+        # 就被打断重连（实测 40 秒重连 3 次）。阻塞着等更稳。
         self.ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
         self.ser.rts = False
         self.ser.dtr = False
@@ -309,10 +325,26 @@ class SerialBoardLink:
     # ---- 发 ----
 
     def send(self, ftype: int, payload: bytes = b""):
+        """发一帧。**写失败绝不往上抛**，只记数。
+
+        为什么必须这样：上层有 asyncio 的会话循环，一次串口写超时从
+        `_mic_loop` 里逃出去就会把**整个 ws 会话打断重连**（实测日志：
+        写超时后 11 秒就重连了一次），一次可自愈的丢包被升级成一次断线。
+        而且丢掉的命令本来就有心跳重发兜着 —— 开麦/音量/校时/屏幕状态
+        分别按 1/10/60/3 秒重发，下一拍就补上了。
+        """
         if not self.ser:
             raise RuntimeError("串口未打开")
-        self.ser.write(build_frame(ftype, payload, self.tx_seq))
+        try:
+            self.ser.write(build_frame(ftype, payload, self.tx_seq))
+        except Exception as e:
+            self.tx_err += 1
+            if self.tx_err in (1, 10, 100, 1000, 10000):
+                log("serial", "串口写失败 %d 次（%s）—— 靠心跳重发兜底，不断线"
+                    % (self.tx_err, e))
+            return False
         self.tx_seq = (self.tx_seq + 1) & 0xFF
+        return True
 
     def send_audio_down(self, pcm: bytes):
         """把 PCM 切成 MAX_PAYLOAD 一片发下去（一片 = 32ms@16k，延迟可接受）。"""
@@ -326,7 +358,8 @@ class SerialBoardLink:
         self.send(T_PING, b"")
 
     def stats(self):
-        return {"crc_err": self.parser.crc_err, "resync": self.parser.resync}
+        return {"crc_err": self.parser.crc_err, "resync": self.parser.resync,
+                "tx_err": self.tx_err}
 
 
 if __name__ == "__main__":

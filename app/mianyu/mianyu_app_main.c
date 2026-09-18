@@ -205,6 +205,10 @@ static void publish_ui(app_t *a)
     st.last_onset_sec = a->last_onset_sec;
     st.last_wakes     = a->last_wakes;
 
+    /* 语音状态由平台层给：真机是网关下发的（只有 PC 侧分得出"在听/在想/在说"），
+     * 模拟器恒 0。界面据此在屏幕上显示"设备现在在干什么"。 */
+    st.voice = my_hal_voice_state();
+
     my_hal_ui_update(&st);
 }
 

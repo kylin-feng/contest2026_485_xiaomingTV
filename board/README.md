@@ -10,12 +10,12 @@
 | 文件 | 职责 |
 |---|---|
 | `bsp_audio_test.c` | 音频通路 bring-up 与自检：AUDCODEC 时钟/REFGEN/DAC/ADC 初始化、DMA 分配、寄存器回读、Goertzel 频谱自检、声学回环对照（`bsp_audio_loopback`）。同时对外提供 `bsp_audio_ready / play_pcm / play_clear / mic_read / set_amp / set_volume_pct` —— 这正是 `app/mianyu/hal/sf32lb52/mianyu_hal_vela.c` 调用的接口 |
-| `bsp_voice_link.c` | 串口语音链路：UART1(`/dev/console`) 独占、帧协议 `A5 5A + CRC16-CCITT-FALSE`、开机协议自检、上行 MIC / 下行 PCM / 事件 / 命令分发 |
+| `bsp_voice_link.c` | 串口语音链路：UART1(`/dev/console`) 独占、帧协议 `A5 5A + CRC16-CCITT-FALSE`、开机协议自检、上行 MIC / 事件 / 命令分发、下行 **μ-law 压缩音频**（`T_AUDIO_ULAW 0x07`，解码表开机算一次；为什么要压缩见 `voice/ulaw.py` 的注释）。板子的周期状态日志走 `T_LOG` 帧而不是 `syslog` —— `syslog` 会走同一个串口，把二进制帧流冲得七零八落（实测 6 秒 24 次重同步） |
 | `patch_board_build.py` | **在 openvela 工程里做幂等接入**：把两个 .c 加进板级 CMakeLists 的 SRCS、在 `sifli_ap.c` 的 `board_late_initialize()` 里调 `bsp_voice_link_start()`、把 `CONFIG_INIT_ENTRYPOINT` 从 `nsh_main` 改成 `mianyu_main`（三处配置同时改，见下） |
 | `push_to_buildhost.py` | 把上面两个 .c 用 base64 推到编译主机并执行 `patch_board_build.py` |
 | `sf32lb_lcd.c` | **板级 LCD 驱动（本队改动版）**。落地在 `vendor/sifli/boards/sf32lb52/drivers/lcd/`。三处关键改动：① `lcddev_register()` 前置到面板就绪之后、bring-up 测试之前（顺序错了界面线程会等不到 `/dev/lcd0` 直接退出，见 `../docs/真机显示与触摸定性_20260915.md`）；② `sf32lb_lcd_wrram()` 加 `s_wr_lock` 串行化，并带 putarea/drop/wrram/done/timeout 计数与 5s 心跳；③ bring-up 全屏纯色测试由 `CONFIG_MIANYU_LCD_BRINGUP_VISUAL` 控制，默认关 |
 | `bsp_lcd_tp.c` | 板级触摸电源域：`BSP_TP_PowerUp` 里带 I2C1 空闲电平电气检测（临时把 PA30/PA33 改成 input+pullup 读电平，1/1 才算总线正常） |
-| `co5300.c` / `ft6146.c` | co5300 面板与 ft6146 触摸驱动（含 `[co5300][readback]` 自检与 `[ft6146][diag]` 诊断打点）。这两个是**审计用的只读副本**，未改逻辑 |
+| `co5300.c` / `ft6146.c` | co5300 面板与 ft6146 触摸驱动（含 `[co5300][bl]`/`[co5300][diag]` 打点与 `[ft6146][diag]` 诊断）。**本文件与实机编译进固件的那份逐字节一致**（`vendor/sifli/boards/sf32lb52/drivers/lcd/co5300.c`）。`ft6146.c` 未改逻辑，是审计用的只读副本；`co5300.c` 有一处产品化改动：把 v50 的取证自检块（6×8s ALLPON + 冷上电扰动）用 `CONFIG_MIANYU_LCD_V50_SELFTEST` 包起来、**默认关闭**。理由见文件内注释：那块自检跑在 `lcddev_register()` 之前，会让开机后 50 多秒内 `/dev/lcd0` 不存在，界面线程干等、屏幕上只有测试色在闪 —— 表现完全像"屏坏了" |
 
 ## 硬件通路（调试地图）
 
