@@ -89,7 +89,7 @@ body{background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang S
 .sring{position:relative;width:96px;height:96px;flex-shrink:0}
 .sring svg{position:absolute;inset:0;transform:rotate(-90deg)}
 .sring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.sring .mid b{font-size:28px;font-weight:700}
+.sring .mid b{font-size:28px;font-weight:700;max-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sring .mid span{font-size:8px;letter-spacing:2px;color:var(--mut2)}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1}
 .kpi{background:var(--card2);border-radius:12px;padding:9px 11px}
@@ -1068,6 +1068,8 @@ function sunset(){
 }
 function sunrise(){
   speechSynthesis.cancel();
+  /* 日落遮罩也要清：sunset() 的渐暗动画可能还没走完就日出了 */
+  $('ovSunset').style.opacity=0;
   $('ovDark').style.opacity=0;
   setOrb('warm','唤醒','日出中','');
   petWake(); setScene('dawn');
@@ -1076,7 +1078,8 @@ function sunrise(){
     p+=.04; $('ovSunrise').style.opacity=Math.min(.65,p);
     if(p>=.65){ clearInterval(iv); birdsong(); finishSession(); addCoin(30,'按时起床');
       setTimeout(()=>{ $('ovSunrise').style.opacity=0; layerTo(scape.birds,0,8);
-        setOrb('','待机','就绪','点下面按钮，开始今晚'); $('orbCore').classList.remove('breathing'); setScene(''); }, T(25)); }
+        setOrb('','待机','就绪','点下面按钮，开始今晚'); $('orbCore').classList.remove('breathing'); setScene('');
+        $('btnNight').textContent='开始晚安'; }, T(25)); }
   }, T(1));
 }
 function birdsong(){
@@ -1089,6 +1092,44 @@ function birdsong(){
     og.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.15);
     o.connect(og); og.connect(scape.birds.g); o.start(); o.stop(AC.currentTime+.16);
   }); }
+}
+
+/* ---------- 演示速览：一整夜压进约 25 秒（路演用） ----------
+ * ×20 只提速计时器，但日出的触发点是真实时钟（明早 07:00），
+ * 一整夜除以 20 仍要几十分钟——所以路演另做一条脚本化的速览时间线。 */
+let tourOn=false, tourT=[];
+function tourClear(){ tourT.forEach(clearTimeout); tourT=[]; tourOn=false; }
+function tourLater(sec,fn){ tourT.push(setTimeout(fn, sec*1000)); }
+function demoTour(){
+  audio(); clearTimers();
+  if(state.asleep) endNight();
+  tourClear();
+  ['ovSunset','ovDark','ovSunrise'].forEach(id=>$(id).style.opacity=0);
+  tourOn=true;
+  state.asleep=true; fadePlanOn=false;
+  state.session={ startAt:Date.now(), masked:0, wakes:0, stages:[], demo:true };
+  $('btnNight').textContent='结束今晚';
+  feed(nowHM(),'演示速览启动 · 一整夜压进 25 秒');
+  petSay('看好了，一整夜演一遍给你看', false);
+  speak('演示速览。一整夜，二十五秒。');
+  sunset(); setRecipe('cabin');
+  tourLater(3, ()=>{ sim.stage='浅睡'; sim.breathTarget=11; state.session.stages.push(['浅睡',Date.now()]); feed(nowHM(),'入睡 → 浅睡 · 呼吸放缓'); });
+  tourLater(7, ()=>{ sim.stage='深睡'; sim.breathTarget=8;  state.session.stages.push(['深睡',Date.now()]); feed(nowHM(),'深睡 · 场景层降至 25%'); });
+  tourLater(9, ()=>{ state.session.masked++; feed(nowHM(),'环境噪音 52dB → 遮蔽层推至 32%'); });
+  tourLater(12,()=>{ sim.stage='REM'; sim.breathTarget=10.5; state.session.stages.push(['REM',Date.now()]); feed(nowHM(),'REM · 保留 40% 遮蔽'); });
+  tourLater(15,()=>{ sim.stage='深睡'; sim.breathTarget=8; state.session.stages.push(['深睡',Date.now()]); });
+  tourLater(17,()=>{ state.session.wakes++; feed(nowHM(),'夜醒 → 耳语陪护，不亮屏'); petSay('我在，别急着看手机', false); });
+  tourLater(20,()=>{ demoSpeed=10; sunrise(); });
+  tourLater(27,()=>{
+    demoSpeed=1; tourClear(); clearTimers();   // 日落渐暗的长间隔也要停，否则结束 8 分钟后又会盖一层夜色
+    if(state.asleep) endNight();
+    ['ovSunset','ovDark','ovSunrise'].forEach(id=>$(id).style.opacity=0);
+    toast('演示速览结束 · 报告已生成'); goTab('report');
+  });
+}
+function cycleDemoMode(){
+  if(tourOn){ tourClear(); endNight(); toast('演示速览已退出'); return; }
+  demoTour();
 }
 
 /* ---------- 一键晚安 ---------- */
@@ -1114,9 +1155,10 @@ function goodNight(){
   $('btnNight').textContent='结束今晚';
 }
 function endNight(){
-  clearTimers(); stopScape(); speechSynthesis.cancel();
+  const wasTour=tourOn;
+  clearTimers(); tourClear(); stopScape(); speechSynthesis.cancel();
   ['ovSunset','ovDark','ovSunrise'].forEach(id=>$(id).style.opacity=0);
-  if(state.asleep){ finishSession(true); }
+  if(state.asleep && !wasTour){ finishSession(true); }
   state.asleep=false; sim.stage='清醒'; sim.breathTarget=14.2; fadePlanOn=false;
   setOrb('','待机','就绪','点下面按钮，开始今晚'); $('orbCore').classList.remove('breathing'); petIdle(); setScene('');
   $('btnNight').textContent='开始晚安';
@@ -1145,11 +1187,12 @@ $('wakeTime').onchange=()=>{ localStorage.setItem('sle_wake',$('wakeTime').value
 
 /* ---------- 会话结算 → 报告 ---------- */
 function finishSession(early){
-  const s=state.session; if(!s) return;
-  const mins=Math.max(1,Math.round((Date.now()-s.startAt)/60000*demoSpeed));
+  const s=state.session; if(!s||s.done) return; s.done=true;
+  /* 演示速览按“一整夜”出报告，避免 25 秒演出算出 3 分钟睡眠 */
+  const mins=s.demo?432:Math.max(1,Math.round((Date.now()-s.startAt)/60000*demoSpeed));
   const deepMin=s.stages.filter(x=>x[0]==='深睡').length*25;
-  const score=Math.max(60,Math.min(98, 92 - s.wakes*4 - Math.max(0,25-mins/12) + (s.masked>0?2:0)));
-  const rpt={ date:new Date().toLocaleDateString('zh-CN'), mins, deep:Math.min(45,Math.round(deepMin/Math.max(1,mins)*100)||28),
+  const score=Math.round(Math.max(60,Math.min(98, 92 - s.wakes*4 - Math.max(0,25-mins/12) + (s.masked>0?2:0))));
+  const rpt={ date:new Date().toLocaleDateString('zh-CN'), mins, deep:s.demo?31:Math.min(45,Math.round(deepMin/Math.max(1,mins)*100)||28),
     wakes:s.wakes, masked:s.masked, score };
   localStorage.setItem('sle_report', JSON.stringify(rpt));
   const hist=(()=>{ try{ return JSON.parse(localStorage.getItem('sle_reports'))||[]; }catch(e){ return []; } })();
@@ -1731,11 +1774,11 @@ document.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>{
   if(d==='up'||d==='down'){ const v=$('vol'); v.value=Math.max(0,Math.min(100,+v.value+(d==='up'?10:-10)));
     v.dispatchEvent(new Event('input')); toast('音量 '+v.value+'%'); blip(d==='up'?760:480); }
 });
-/* 戳一戳（夜睡时戳=夜醒陪护）；连点5下=演示加速 */
+/* 戳一戳（夜睡时戳=夜醒陪护）；连点5下=演示速览 */
 let pokeN=0, pokeT=null;
 petEl.addEventListener('pointerdown',()=>{
   pokeN++; clearTimeout(pokeT);
-  if(pokeN>=5){ pokeN=0; demoSpeed=demoSpeed===1?20:1; toast(demoSpeed>1?'演示模式 ×20 已开':'恢复正常速度'); return; }
+  if(pokeN>=5){ pokeN=0; cycleDemoMode(); return; }
   pokeT=setTimeout(()=>{ if(pokeN>0&&pokeN<5) pokePet(); pokeN=0; }, 400);
 });
 function pokePet(){
@@ -2112,7 +2155,11 @@ $('nickSave').onclick=()=>{
   petSay(v?`我以后就叫${v}啦，请多关照`:'名字恢复默认啦', true);
 };
 /* LLM 设置 */
-['llmKey','llmEp','llmModel'].forEach(id=>{ const v=localStorage.getItem('sle_'+id); if(v) $(id).value=v; });
+['llmKey','llmEp','llmModel'].forEach(id=>{
+  /* 保存时同时写了 sle_llmKey 与 converse() 实际读取的 sle_llm_key，这里两者都认 */
+  const v=localStorage.getItem('sle_'+id)||localStorage.getItem('sle_llm_'+id.slice(3).toLowerCase());
+  if(v) $(id).value=v;
+});
 $('llmSave').onclick=()=>{
   localStorage.setItem('sle_llmKey',$('llmKey').value.trim());
   localStorage.setItem('sle_llmEp',$('llmEp').value.trim());
@@ -2124,12 +2171,11 @@ $('llmSave').onclick=()=>{
   toast($('llmKey').value.trim()?'已保存 · 自由对话已启用':'已清空 · 使用内置应答');
 };
 renderRecipes(); renderReport(); renderNights();
-/* 连点圆盘 5 次：演示加速 ×20（路演用） */
+/* 连点圆盘 5 次：演示速览（路演用） */
 let tapN=0, tapT=null;
 $('orbMd').parentElement.addEventListener('pointerdown',()=>{
   tapN++; clearTimeout(tapT); tapT=setTimeout(()=>tapN=0,1200);
-  if(tapN>=5){ tapN=0; demoSpeed=demoSpeed===1?20:1;
-    toast(demoSpeed>1?'演示模式 ×20 已开':'恢复正常速度'); }
+  if(tapN>=5){ tapN=0; cycleDemoMode(); }
 });
 /* ---------- 多闹钟 · 提醒 ---------- */
 function alarms(){ try{ return JSON.parse(localStorage.getItem('sle_alarms'))||[]; }catch(e){ return []; } }
