@@ -1,0 +1,2278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#050509">
+<title>眠屿 · 哄睡 Agent</title>
+<style>
+:root{
+  --bg:#050509; --card:#12131f; --card2:#181a2b; --line:rgba(255,255,255,.08);
+  --ink:#F2F0EA; --mut:#8B8FA3; --mut2:#565A6E;
+  --terra:#E8875A; --gold:#D8B878; --violet:#9D8CFF; --sage:#7FBF9B;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,"PingFang SC",sans-serif;
+  -webkit-font-smoothing:antialiased;overflow:hidden;user-select:none}
+#app{height:100%;display:flex;flex-direction:column;max-width:520px;margin:0 auto;position:relative}
+/* 顶栏 */
+.hd{padding:calc(env(safe-area-inset-top) + 14px) 22px 10px;display:flex;justify-content:space-between;align-items:center}
+.hd .wm{font-size:15px;letter-spacing:4px;font-weight:600}
+.hd .wm em{font-style:normal;color:var(--terra)}
+.hd .time{font-size:11px;color:var(--mut2);letter-spacing:1px;font-variant-numeric:tabular-nums}
+/* 页面 */
+.pg{flex:1;overflow-y:auto;padding:8px 22px 96px;display:none;-webkit-overflow-scrolling:touch}
+.pg.on{display:block}
+.pg::-webkit-scrollbar{display:none}
+/* ---------- 主控 ---------- */
+.greet{font-size:22px;font-weight:600;letter-spacing:1px;margin:14px 2px 2px}
+.greet-sub{font-size:11px;color:var(--mut2);margin:8px 2px 0;letter-spacing:.5px}
+.orb-zone{display:flex;flex-direction:column;align-items:center;padding:26px 0 6px}
+.orb{position:relative;width:230px;height:230px}
+.orb svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.orb svg circle{fill:none;stroke-linecap:round}
+.orb-core{position:absolute;left:50%;top:50%;width:150px;height:150px;border-radius:50%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;
+  background:radial-gradient(circle at 40% 30%,#252a45,#12142a 72%);
+  box-shadow:inset 0 0 34px rgba(0,0,0,.6),0 0 46px rgba(232,135,90,.1);
+  transition:background 1.2s ease,box-shadow 1.2s ease}
+.orb-core .st{font-size:8.5px;letter-spacing:2px;color:var(--mut2)}
+.orb-core .md{font-size:19px;font-weight:600;letter-spacing:3px}
+.orb-core .hint{font-size:8.5px;color:var(--mut2);padding:0 16px;text-align:center}
+.orb-core.warm{background:radial-gradient(circle at 42% 32%,#FFE3C2,#E8875A 55%,#6E3A1C);
+  box-shadow:0 0 80px 20px rgba(232,135,90,.4),inset 0 0 30px rgba(120,60,0,.35)}
+.orb-core.warm .st,.orb-core.warm .hint{color:rgba(255,244,230,.8)}
+.orb-core.night{background:radial-gradient(circle at 42% 32%,#1b1740,#0a0918 75%);
+  box-shadow:0 0 44px 8px rgba(157,140,255,.15),inset 0 0 44px rgba(0,0,0,.7)}
+.orb-core.breathing{animation:br 8s ease-in-out infinite}
+@keyframes br{50%{transform:translate(-50%,-50%) scale(1.05)}}
+.orb-meta{display:flex;gap:26px;margin-top:14px;font-size:9.5px;letter-spacing:2px;color:var(--mut2)}
+.orb-meta b{color:var(--mut);font-weight:500;font-variant-numeric:tabular-nums}
+.btn-big{width:100%;padding:17px;border:none;border-radius:999px;margin-top:18px;cursor:pointer;
+  background:linear-gradient(120deg,var(--terra),#D8704A);color:#1D0E05;font-size:15px;letter-spacing:5px;font-weight:600;
+  box-shadow:0 12px 34px -10px rgba(232,135,90,.55)}
+.btn-big:active{transform:scale(.98)}
+.btn-row{display:flex;gap:10px;margin-top:12px}
+.btn-sm{flex:1;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:999px;
+  padding:12px 0;font-size:11.5px;letter-spacing:2px;cursor:pointer}
+.btn-sm:active{border-color:var(--terra);color:var(--terra)}
+.chat-row{display:flex;gap:8px;margin-top:10px}
+.chat-row input{flex:1;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:12px 16px;color:var(--ink);font-size:12px;outline:none}
+.chat-row input:focus{border-color:rgba(232,135,90,.5)}
+.chat-row button{background:var(--card);border:1px solid var(--line);color:var(--terra);border-radius:999px;padding:0 18px;font-size:12px;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin-top:16px}
+.card-t{font-size:9.5px;letter-spacing:2.5px;color:var(--mut2);margin-bottom:10px}
+.li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:11.5px}
+.li:last-child{border:none}
+.li .k{color:var(--gold);font-size:10px;letter-spacing:1px;flex-shrink:0}
+.li .d{color:var(--mut);text-align:right;line-height:1.7}
+/* 音景 */
+.rcp{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin-top:12px}
+.rcp.live{border-color:rgba(232,135,90,.5);box-shadow:0 0 24px -6px rgba(232,135,90,.3)}
+.rcp .inf{flex:1;min-width:0}
+.rcp .nm{font-size:14px;font-weight:600;letter-spacing:1px;display:flex;align-items:center;gap:8px}
+.rcp .nm .tag{font-size:8px;letter-spacing:1.5px;color:var(--violet);border:1px solid rgba(157,140,255,.4);border-radius:999px;padding:2px 8px}
+.rcp .ds{font-size:9.5px;color:var(--mut2);margin-top:5px}
+.rcp .mix{display:flex;gap:3px;margin-top:9px}
+.rcp .mix i{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.07);position:relative;overflow:hidden}
+.rcp .mix i::after{content:'';position:absolute;inset:0;width:var(--w);background:linear-gradient(90deg,var(--terra),var(--gold))}
+.pbtn{width:42px;height:42px;border-radius:50%;border:1px solid rgba(232,135,90,.6);background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.25s}
+.pbtn .tri{width:0;height:0;border-left:11px solid var(--terra);border-top:7px solid transparent;border-bottom:7px solid transparent;margin-left:3px}
+.rcp.live .pbtn{background:var(--terra)}
+.rcp.live .pbtn .tri{border:none;width:10px;height:12px;margin:0;border-left:3.5px solid #1D0E05;border-right:3.5px solid #1D0E05}
+/* 报告 */
+.score-wrap{display:flex;align-items:center;gap:18px}
+.sring{position:relative;width:96px;height:96px;flex-shrink:0}
+.sring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.sring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sring .mid b{font-size:28px;font-weight:700}
+.sring .mid span{font-size:8px;letter-spacing:2px;color:var(--mut2)}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1}
+.kpi{background:var(--card2);border-radius:12px;padding:9px 11px}
+.kpi .k{font-size:8.5px;color:var(--mut2);letter-spacing:1px;white-space:nowrap}
+.kpi .v{font-size:14px;font-weight:600;margin-top:4px;white-space:nowrap}
+.empty{margin-top:60px;text-align:center;color:var(--mut2);font-size:12px;line-height:2.2}
+/* 我的 */
+.tgl{width:38px;height:21px;border-radius:11px;background:#3E8F6B;position:relative;cursor:pointer;transition:.3s;flex-shrink:0}
+.tgl::after{content:'';position:absolute;right:2.5px;top:2.5px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.3s}
+.tgl.off{background:#2A2D44}.tgl.off::after{right:19.5px}
+/* 学习乐园 */
+.study-stats{display:flex;justify-content:space-around}
+.ss{text-align:center}
+.ss b{display:block;font-size:19px;font-weight:700;color:var(--gold)}
+.ss span{font-size:9px;letter-spacing:1px;color:var(--mut2)}
+.study-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px}
+.study-grid button{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 8px;
+  color:var(--ink);font-size:12.5px;font-weight:600;letter-spacing:1px;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center;transition:.25s}
+.study-grid button span{font-size:9px;color:var(--mut2);font-weight:400;letter-spacing:.5px}
+.study-grid button:active{border-color:var(--terra);transform:scale(.97)}
+.study-stage{margin-top:14px}
+.study-stage .word-big{font-size:34px;font-weight:700;letter-spacing:1px;text-align:center;margin:8px 0 2px}
+.study-stage .word-ph{text-align:center;font-size:12px;color:var(--mut2);margin-bottom:10px}
+.study-stage .word-mean{text-align:center;font-size:14px;line-height:2;color:var(--milk);display:none}
+.study-stage .word-mean.show{display:block}
+.study-stage .word-ex{text-align:center;font-size:11px;color:var(--mut);margin-top:8px;font-style:italic}
+.study-btns{display:flex;gap:10px;margin-top:14px}
+.study-btns button{flex:1;padding:12px;border-radius:999px;border:1px solid var(--line);background:var(--card2);color:var(--mut);font-size:12px;cursor:pointer;letter-spacing:2px}
+.study-btns button.ok{background:linear-gradient(120deg,var(--terra),#D8704A);color:#1D0E05;border:none;font-weight:600}
+.study-q{font-size:16px;text-align:center;line-height:2;margin:10px 0}
+.study-q b{color:var(--gold);font-size:22px}
+.study-in{display:flex;gap:8px;margin-top:12px}
+.study-in input{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:11px 16px;color:var(--ink);font-size:13px;outline:none}
+.study-in button{background:var(--terra);border:none;border-radius:999px;color:#1D0E05;padding:0 18px;font-size:12px;font-weight:600;cursor:pointer}
+.study-msg{text-align:center;font-size:11.5px;color:var(--mut);margin-top:10px;min-height:18px}
+.study-lock{text-align:center;padding:20px 6px;font-size:12.5px;line-height:2.2;color:var(--mut)}
+.poem-li{padding:11px 2px;border-bottom:1px solid var(--line);font-size:12.5px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.poem-li:last-child{border:none}
+.poem-li span{color:var(--mut2);font-size:10px}
+.focus-num{font-size:44px;font-weight:700;text-align:center;letter-spacing:4px;margin:14px 0;font-variant-numeric:tabular-nums;color:var(--milk)}
+/* tabbar */
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:calc(66px + env(safe-area-inset-bottom));
+  display:flex;background:rgba(5,5,9,.9);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);z-index:20;max-width:520px;margin:0 auto}
+.tb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  font-size:10px;letter-spacing:2.5px;color:var(--mut2);cursor:pointer;transition:.25s}
+.tb i{width:4px;height:4px;border-radius:50%;background:transparent}
+.tb.on{color:var(--terra)}.tb.on i{background:var(--terra)}
+/* ---------- 陪伴宠物「小眠」 ---------- */
+.orb{display:none}   /* 圆盘退居幕后，保留数据流 */
+.orb-zone{padding:2px 0}
+.orb-meta{margin-top:8px}
+.pet-zone{display:flex;flex-direction:column;align-items:center;padding:16px 0 2px;position:relative}
+.bubble{max-width:80%;background:#F5EFE2;color:#3A2E22;border-radius:16px 16px 16px 4px;padding:10px 16px;
+  font-size:12.5px;line-height:1.8;opacity:0;transform:translateY(8px) scale(.96);transition:.35s;position:relative;margin-bottom:8px}
+.bubble.show{opacity:1;transform:none}
+.bubble::after{content:'';position:absolute;left:30px;bottom:-6px;border:7px solid transparent;border-top-color:#F5EFE2;border-bottom:none}
+.pet{width:196px;height:206px;cursor:pointer;transition:transform .15s}
+.pet.float{animation:floatY 4.5s ease-in-out infinite}
+@keyframes floatY{50%{transform:translateY(-9px)}}
+.pet.poke{animation:squash .45s ease}
+@keyframes squash{30%{transform:scale(1.12,.84)}60%{transform:scale(.95,1.07)}}
+#pet .eyes{display:none}
+#pet.e-open .e-open,#pet.e-happy .e-happy,#pet.e-sleepy .e-sleepy,#pet.e-closed .e-closed{display:block}
+#pet .mouth-talk{display:none}
+#pet.talk .mouth-default{display:none}
+#pet.talk .mouth-talk{display:block}
+#pet.talk .mouth-talk ellipse{transform-box:fill-box;transform-origin:center;animation:talkm .3s ease-in-out infinite}
+@keyframes talkm{50%{transform:scaleY(.4)}}
+.zzz{position:absolute;top:0;right:22%;width:44px;height:80px;pointer-events:none}
+.zzz span{position:absolute;font-weight:800;color:var(--violet);opacity:0;animation:zf 3s ease-out infinite}
+.zzz span:nth-child(1){font-size:14px;left:0;bottom:0}
+.zzz span:nth-child(2){font-size:19px;left:14px;bottom:8px;animation-delay:1s}
+.zzz span:nth-child(3){font-size:24px;left:28px;bottom:16px;animation-delay:2s}
+@keyframes zf{0%{opacity:0;transform:translateY(10px)}25%{opacity:.9}100%{opacity:0;transform:translateY(-46px)}}
+.pet-name{margin-top:4px;font-size:12.5px;letter-spacing:3px;color:var(--mut)}
+.pet-name em{font-style:normal;color:var(--gold)}
+.pet img{width:100%;height:100%;object-fit:contain;display:block}
+/* ---------- AI 插画掌机（美术图 + 实时屏幕叠加层） ---------- */
+.gbx{position:relative;width:min(86vw,330px);margin:0 auto;filter:drop-shadow(0 26px 46px rgba(0,0,0,.65))}
+.gbx-art{width:100%;display:block;border-radius:20px}
+.gbx-screen{position:absolute;left:18%;top:12.2%;width:64%;height:37.6%;overflow:hidden;border-radius:8px;
+  background:#0B0F0C;box-shadow:inset 0 0 0 2px rgba(0,0,0,.5)}
+.gbx-screen::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:5;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px)}
+.gbx-screen .pet{width:100%;height:100%;padding:9%}
+.gbx-screen .zzz{top:2px;right:6%}
+.gbx-hit{position:absolute;background:rgba(255,255,255,0);border:none;cursor:pointer;z-index:8;border-radius:8px}
+.gbx-hit:active{background:rgba(255,255,255,.12)}
+.gbx-stats{position:absolute;left:16%;right:16%;top:56.2%;display:flex;justify-content:space-between;z-index:8}
+.gbx-stats .stat{display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:7.5px;letter-spacing:2px;color:#5A5248;font-weight:700}
+.gbx-stats .pips i{background:rgba(0,0,0,.14)}
+.gbx-stats .pips i.on{background:#C03A5E}
+.gbx-led{position:absolute;left:67.4%;top:73.2%;width:9px;height:9px;border-radius:50%;
+  background:#B08ACF;box-shadow:0 0 6px rgba(176,138,207,.6);z-index:8}
+.gbx-led.on{background:var(--sage);box-shadow:0 0 12px var(--sage);animation:pulse 1.4s infinite}
+/* ---------- 屏幕内场景（黄昏/深夜/日出） ---------- */
+.gbx-scene{position:absolute;inset:0;z-index:0;transition:background 2.5s ease;
+  background:linear-gradient(180deg,#241B3A 0%,#3A2444 50%,#151021 100%)}
+.gbx-scene.night{background:linear-gradient(180deg,#070A1E 0%,#12162E 60%,#0B0F0C 100%)}
+.gbx-scene.dawn{background:linear-gradient(180deg,#3A3468 0%,#A85A50 55%,#E8A86A 100%)}
+.gbx-scene .moon{position:absolute;top:9%;right:11%;width:20px;height:20px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#FFF8E0,#E0CC92);box-shadow:0 0 16px rgba(255,240,190,.55);
+  opacity:0;transition:opacity 2.5s}
+.gbx-scene.night .moon{opacity:.95}
+.gbx-scene .star{position:absolute;width:2px;height:2px;border-radius:50%;background:#FFF;opacity:0}
+.gbx-scene.night .star{animation:tw 3.2s ease-in-out infinite}
+.gbx-scene.dawn .moon,.gbx-scene.dawn .star{opacity:0!important;animation:none}
+@keyframes tw{0%,100%{opacity:.12}50%{opacity:.95}}
+.gbx-screen .pet{position:relative;z-index:2}
+.gbx-screen .pet img{transition:transform .12s ease, filter .8s ease}
+.gbx-screen .pet.sleep img{filter:brightness(.5) saturate(.7)}
+.gbx-screen .pet.drowsy img{filter:brightness(.75) saturate(.85)}
+.gbx-screen .zzz{z-index:3}
+.pet.blink img{transform:scaleY(.86)}
+/* 屏幕 HUD（LV + 时钟） */
+.gbx-hud{position:absolute;top:5px;left:8px;right:8px;display:flex;justify-content:space-between;z-index:4;
+  font-family:ui-monospace,Menlo,monospace;font-size:8px;letter-spacing:1.5px;color:#B8C4D8;
+  text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none}
+.gbx-hud b{color:#FFD98A;font-weight:700}
+/* 升级金光 */
+#ovFlash{background:radial-gradient(circle,#FFF3D0,#E8B85A 60%,rgba(232,135,90,0));transition:opacity .18s}
+.gb{width:296px;padding:16px 16px 20px;border-radius:18px 18px 56px 18px;position:relative;
+  background:linear-gradient(165deg,#DDD8CE,#BDB7A9 55%,#9E988A);
+  box-shadow:inset 0 2px 4px rgba(255,255,255,.6),inset 0 -10px 18px rgba(70,60,50,.25),0 20px 44px -12px rgba(0,0,0,.65);
+  transition:background .6s}
+.gb-top{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:0 4px}
+.gb-led{width:7px;height:7px;border-radius:50%;background:#E8443A;box-shadow:0 0 8px #E8443A}
+.gb-led.on{background:var(--sage);box-shadow:0 0 10px var(--sage);animation:pulse 1.4s infinite}
+.gb-logo{font-size:8.5px;letter-spacing:3px;color:#5A5248;font-weight:700}
+.gb-bezel{background:#26262E;border-radius:12px 12px 30px 12px;padding:12px 12px 8px;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.7)}
+.gb-screen{background:#0E1512;border-radius:6px;height:212px;position:relative;overflow:hidden;
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.5),inset 0 4px 18px rgba(0,0,0,.8)}
+.gb-screen::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px)}
+.gb-screen .pet{width:100%;height:100%;padding:6px}
+.gb-screen .pet img{transition:filter .8s, transform .2s}
+.gb-screen .pet.sleep img{filter:brightness(.45) saturate(.7)}
+.gb-screen .pet.drowsy img{filter:brightness(.72) saturate(.85)}
+.gb-screen .pet.talk img{animation:tbounce .28s ease-in-out infinite}
+@keyframes tbounce{50%{transform:scale(1.03,1.06) translateY(-2%)}}
+.gb-screen .zzz{top:2px;right:8%}
+.gb-screentag{text-align:center;font-size:7px;letter-spacing:2px;color:#7A7A88;margin-top:5px}
+.gb-stats{display:flex;justify-content:space-around;margin-top:10px;padding:0 6px}
+.gb-stats .stat{display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-size:8px;letter-spacing:2px;color:#4A4238;font-weight:700}
+.pips{display:flex;gap:2.5px}
+.pips i{width:11px;height:5px;border-radius:1px;background:rgba(0,0,0,.18)}
+.pips i.on{background:#7A3048}
+.gb-ctrl{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:0 6px}
+.dpad{position:relative;width:86px;height:86px}
+.dpad button{position:absolute;background:#2A2A32;border:none;cursor:pointer;box-shadow:0 2px 0 #141418}
+.dpad button:active{transform:translateY(1px);box-shadow:none}
+.dpad .up{left:29px;top:0;width:28px;height:30px;border-radius:5px 5px 0 0}
+.dpad .down{left:29px;bottom:0;width:28px;height:30px;border-radius:0 0 5px 5px}
+.dpad .left{left:0;top:29px;width:30px;height:28px;border-radius:5px 0 0 5px}
+.dpad .right{right:0;top:29px;width:30px;height:28px;border-radius:0 5px 5px 0}
+.dpad .mid{left:29px;top:29px;width:28px;height:28px;cursor:default;box-shadow:none}
+.dpad .mid::after{content:'';display:block;width:12px;height:12px;margin:8px auto;border-radius:50%;background:#1A1A20}
+.ab{display:flex;gap:12px;transform:rotate(-16deg);margin-right:6px}
+.ab button{width:42px;height:42px;border-radius:50%;border:none;cursor:pointer;font-size:12px;font-weight:800;color:#FFF;
+  box-shadow:0 3px 0 #6E2438,inset 0 2px 3px rgba(255,255,255,.35);transition:transform .1s}
+.ab button:active{transform:translateY(2px);box-shadow:0 1px 0 #6E2438}
+.ab .ba{background:radial-gradient(circle at 35% 30%,#E87A9A,#C03A5E)}
+.ab .bb{background:radial-gradient(circle at 35% 30%,#D05A80,#A02A4C)}
+.ab-lb{display:flex;gap:30px;font-size:8px;letter-spacing:2px;color:#4A4238;font-weight:700;justify-content:flex-end;margin-top:4px;transform:rotate(-16deg);padding-right:14px}
+.gb-pills{display:flex;justify-content:center;gap:14px;margin-top:12px}
+.gb-pills button{width:44px;height:11px;border-radius:6px;border:none;cursor:pointer;transform:rotate(-16deg);
+  background:linear-gradient(180deg,#5A5462,#3E3946);box-shadow:0 2px 0 #241F2C}
+.gb-pills button:active{transform:rotate(-16deg) translateY(1px);box-shadow:none}
+.gb-pill-lb{display:flex;justify-content:center;gap:22px;font-size:7.5px;letter-spacing:2px;color:#4A4238;font-weight:700;margin-top:5px}
+.gb-speaker{position:absolute;right:16px;bottom:12px;width:70px;height:26px;
+  background:repeating-linear-gradient(-45deg,transparent 0 5px,rgba(0,0,0,.22) 5px 7px);border-radius:6px}
+/* ---------- 屏内菜单 / 数羊 / 摸头爱心 ---------- */
+.gb-menu{position:absolute;inset:0;z-index:6;display:none;flex-direction:column;justify-content:center;gap:6px;
+  background:rgba(10,14,11,.92);padding:0 26px}
+.gb-menu.show{display:flex}
+.gm-item{font-size:12px;letter-spacing:2px;color:#9DA2B8;padding:7px 14px;border-radius:8px;position:relative}
+.gm-item.sel{color:#FFE3C2;background:rgba(232,135,90,.14)}
+.gm-item.sel::before{content:'▶';position:absolute;left:-4px;color:var(--terra);font-size:10px}
+.sheep-ov{position:absolute;inset:0;z-index:6;display:none;background:rgba(10,14,11,.9);overflow:hidden}
+.sheep-ov.show{display:block}
+.fence{position:absolute;left:0;right:0;bottom:34px;height:26px;
+  background:repeating-linear-gradient(90deg,#5A4632 0 6px,transparent 6px 26px);border-top:3px solid #5A4632;border-bottom:3px solid #5A4632;opacity:.8}
+.sheep{position:absolute;bottom:52px;left:-46px;width:38px;height:26px;background:#EDE9DF;border-radius:50% 50% 45% 45%;
+  box-shadow:inset -4px -4px 0 rgba(0,0,0,.12)}
+.sheep::before{content:'';position:absolute;right:-8px;top:4px;width:14px;height:13px;background:#D8D2C4;border-radius:50% 50% 50% 40%}
+.sheep::after{content:'';position:absolute;right:-4px;top:8px;width:2.5px;height:2.5px;border-radius:50%;background:#221D16}
+.sheep.jump{animation:sheepjump 1.5s ease-in-out}
+@keyframes sheepjump{0%{transform:translate(0,0)}30%{transform:translate(70px,-46px)}60%{transform:translate(150px,0)}100%{transform:translate(230px,0)}}
+.sheep-n{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:15px;letter-spacing:3px;color:#EDE9DF}
+.sheep-hint{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:8.5px;letter-spacing:2px;color:var(--mut2)}
+.hearts{position:absolute;inset:0;pointer-events:none;z-index:7}
+.hearts span{position:absolute;font-size:13px;color:#E87A9A;animation:heartup 1.2s ease-out forwards}
+@keyframes heartup{0%{opacity:0;transform:translateY(0) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translateY(-64px) scale(1.15)}}
+/* 宝可梦选择器 */
+.pet-picker{display:flex;gap:16px;margin-top:12px}
+.pchip{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;opacity:.5;transition:.25s}
+.pchip .pc{width:36px;height:36px;border-radius:50%;border:2px solid transparent;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#221506}
+.pchip .pn{font-size:9px;letter-spacing:1px;color:var(--mut2)}
+.pchip.on{opacity:1}
+.pchip.on .pc{border-color:var(--terra);transform:scale(1.12);box-shadow:0 0 14px rgba(232,135,90,.35)}
+/* 小火龙尾巴火苗 */
+.flame{transform-box:fill-box;transform-origin:50% 100%;animation:flick 1.3s ease-in-out infinite}
+@keyframes flick{50%{transform:scaleY(.82) scaleX(1.06)}}
+#pet.sleep .flame{animation:none;transform:scale(.55);opacity:.75}
+/* 全屏灯效 */
+.ov{position:fixed;inset:0;z-index:40;pointer-events:none;opacity:0;transition:opacity 1.2s}
+#ovSunset{background:linear-gradient(180deg,#2b1a3e,#c1440e 60%,#E8875A)}
+#ovDark{background:#000}
+#ovSunrise{background:linear-gradient(180deg,#1a2a52,#E8875A 70%,#FFE3C2)}
+/* 呼吸浮层 */
+.breath-ui{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,5,9,.96)}
+.breath-c{width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,#FFE3C2,#E8875A);box-shadow:0 0 70px 18px rgba(232,135,90,.35)}
+.breath-t{margin-top:32px;font-size:20px;letter-spacing:4px}
+.breath-n{margin-top:10px;font-size:11px;color:var(--mut)}
+.breath-x{position:absolute;top:calc(env(safe-area-inset-top) + 20px);right:24px;background:none;border:1px solid var(--line);color:var(--mut);border-radius:999px;padding:8px 16px;font-size:11px}
+/* ---------- 开场故事（穿越眠屿星） ---------- */
+.story-ov{position:fixed;inset:0;z-index:100;background:#050509;display:none;flex-direction:column;overflow:hidden}
+.story-ov.show{display:flex}
+.story-bg{position:absolute;inset:-6%;background-size:cover;background-position:center;opacity:0;transition:opacity 1.6s;
+  animation:kenburns 24s ease-in-out infinite alternate}
+.story-bg.on{opacity:1}
+@keyframes kenburns{from{transform:scale(1) translate(0,0)}to{transform:scale(1.12) translate(-2%,2%)}}
+.story-vig{position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,5,9,.5),transparent 30%,transparent 55%,rgba(5,5,9,.88) 85%)}
+.story-skip{position:absolute;top:calc(env(safe-area-inset-top) + 16px);right:18px;z-index:3;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.15);color:#9DA2B8;border-radius:999px;padding:7px 16px;font-size:10px;letter-spacing:2px}
+.story-body{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:0 28px calc(env(safe-area-inset-bottom) + 48px);text-align:center}
+.story-text{font-size:16px;line-height:2.3;letter-spacing:1px;color:#F2F0EA;min-height:120px;white-space:pre-line;
+  text-shadow:0 2px 12px rgba(0,0,0,.8)}
+.story-text::after{content:'▎';color:var(--terra);animation:blinkc 1s steps(1) infinite}
+@keyframes blinkc{50%{opacity:0}}
+.story-hint{margin-top:18px;font-size:10px;letter-spacing:3px;color:#8B8FA3;animation:fadeUp 1s both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.story-pets{display:none;justify-content:center;gap:6px;margin-bottom:22px}
+.story-pets.show{display:flex}
+.sp{width:62px;height:62px;border-radius:16px;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.12);
+  padding:5px;cursor:pointer;transition:.3s}
+.sp img{width:100%;height:100%;object-fit:contain}
+.sp.sel{border-color:var(--terra);transform:scale(1.15);box-shadow:0 0 22px rgba(232,135,90,.5);background:rgba(232,135,90,.12)}
+.story-go{display:none;margin:0 auto 16px;background:linear-gradient(120deg,var(--terra),#D8704A);color:#1D0E05;
+  border:none;border-radius:999px;padding:12px 34px;font-size:13px;letter-spacing:3px;font-weight:600;
+  box-shadow:0 8px 26px -8px rgba(232,135,90,.6);cursor:pointer}
+.story-go.show{display:block;animation:fadeUp .4s both}
+/* 猜拳 overlay */
+.rps-ov{position:absolute;inset:0;z-index:6;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:rgba(10,14,11,.92)}
+.rps-ov.show{display:flex}
+.rps-title{font-size:11px;letter-spacing:3px;color:var(--gold)}
+.rps-stage{display:flex;align-items:center;gap:14px;margin:8px 0}
+.rps-hand{width:58px;height:58px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#EDE9DF;letter-spacing:1px}
+.rps-hand.you{border-color:rgba(232,135,90,.5)}
+.rps-vs{font-size:9px;letter-spacing:2px;color:var(--mut2)}
+.rps-hint{font-size:8.5px;letter-spacing:1.5px;color:var(--mut2);text-align:center;line-height:1.9;padding:0 10px}
+/* 成就墙 */
+.achv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.achv{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;opacity:.38}
+.achv.got{opacity:1;border-color:rgba(216,184,120,.45);box-shadow:0 0 14px -6px rgba(216,184,120,.35)}
+.achv .an{font-size:11.5px;font-weight:600;letter-spacing:1px;color:var(--gold)}
+.achv .ad{font-size:9px;color:var(--mut2);margin-top:4px;line-height:1.6}
+/* 报告历史柱状图 */
+.hist{display:flex;align-items:flex-end;gap:7px;height:96px;margin-top:6px}
+.hist .hb{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end}
+.hist .bar{width:100%;border-radius:5px 5px 0 0;background:linear-gradient(180deg,var(--violet),rgba(157,140,255,.15));min-height:8px}
+.hist .bar.today{background:linear-gradient(180deg,var(--terra),rgba(232,135,90,.2))}
+.hist .hv{font-size:8px;color:var(--mut);font-variant-numeric:tabular-nums}
+.hist .hd{font-size:7.5px;color:var(--mut2);letter-spacing:1px}
+/* 定时关闭选中态 */
+.btn-sm.on{border-color:var(--terra);color:var(--terra)}
+/* 时钟屏保 */
+.scr-ov{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 30%,#14162A,#050509 75%)}
+.scr-ov.show{display:flex}
+.scr-time{font-size:84px;font-weight:700;letter-spacing:6px;font-variant-numeric:tabular-nums;
+  background:linear-gradient(180deg,#FFE3C2,#E8875A);-webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:0 0 60px rgba(232,135,90,.25)}
+.scr-date{margin-top:6px;font-size:13px;letter-spacing:3px;color:var(--mut)}
+.scr-pet{width:84px;height:84px;margin-top:26px;animation:floatY 4.5s ease-in-out infinite}
+.scr-pet img{width:100%;height:100%;object-fit:contain}
+.scr-info{margin-top:14px;font-size:10.5px;letter-spacing:2px;color:var(--mut2)}
+.scr-hint{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 30px);font-size:9px;letter-spacing:3px;color:var(--mut2)}
+/* 倒计时 */
+.tmr-num{font-size:44px;font-weight:700;letter-spacing:4px;font-variant-numeric:tabular-nums;color:#EDE9DF;
+  font-family:ui-monospace,Menlo,monospace;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+.tmr-num.run{color:var(--sage)}
+/* 闹钟列表 */
+.alarm-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.alarm-row:last-of-type{border:none}
+.alarm-row .at{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px;min-width:52px}
+.alarm-row .al{flex:1;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alarm-row .ax{background:none;border:1px solid var(--line);color:var(--mut2);border-radius:999px;padding:4px 12px;font-size:10px;cursor:pointer}
+.alarm-row.off .at,.alarm-row.off .al{opacity:.35}
+.alarm-add{display:flex;gap:8px;margin-top:10px}
+.alarm-add input{background:var(--card2);border:1px solid var(--line);border-radius:999px;color:var(--ink);padding:9px 12px;font-size:12px;outline:none}
+.alarm-add input[type=time]{width:96px;flex-shrink:0}
+.alarm-add #alLabel{flex:1;min-width:0}
+.alarm-add button{background:var(--terra);border:none;border-radius:999px;color:#1D0E05;padding:0 16px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0}
+/* 商城 */
+.coin-card{background:linear-gradient(135deg,#2A2138,#1A1626);border:1px solid rgba(216,184,120,.3);border-radius:18px;
+  padding:18px;margin-top:14px;text-align:center}
+.coin-num b{font-size:36px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+.coin-num span{font-size:11px;color:var(--mut);margin-left:8px;letter-spacing:2px}
+.coin-tips{margin-top:8px;font-size:9px;color:var(--mut2);letter-spacing:.5px;line-height:1.8}
+.shop-item{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:14px 16px;margin-top:10px}
+.shop-item .si-inf{flex:1;min-width:0}
+.shop-item .si-nm{font-size:13.5px;font-weight:600;letter-spacing:1px}
+.shop-item .si-ds{font-size:9.5px;color:var(--mut2);margin-top:4px}
+.si-buy{background:none;border:1px solid var(--gold);color:var(--gold);border-radius:999px;
+  padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;font-variant-numeric:tabular-nums}
+.si-buy:active{background:var(--gold);color:#221D16}
+.si-buy.poor{opacity:.35;pointer-events:none}
+/* 学习分段切换 */
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;margin-top:14px}
+.seg-b{flex:1;background:none;border:none;color:var(--mut2);font-size:12px;letter-spacing:2px;padding:9px 0;
+  border-radius:999px;cursor:pointer;transition:.25s}
+.seg-b.on{background:linear-gradient(120deg,var(--terra),#D8704A);color:#1D0E05;font-weight:600}
+/* 睡前邀请 */
+.pass-ov{position:absolute;inset:0;z-index:7;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:rgba(10,14,11,.92);padding:0 16px}
+.pass-ov.show{display:flex}
+.pass-t{font-size:12px;line-height:2;letter-spacing:1px;color:#EDE9DF;text-align:center}
+.pass-btns{display:flex;gap:10px}
+.pass-btns button{padding:9px 20px;border-radius:999px;border:1px solid var(--line);background:var(--card2);
+  color:var(--mut);font-size:11px;cursor:pointer;letter-spacing:1px}
+.pass-btns button.ok{background:linear-gradient(120deg,var(--terra),#D8704A);color:#1D0E05;border:none;font-weight:600}
+/* 星空投影道具 */
+.gbx-scene.starboost.night .star{width:3px;height:3px;animation-duration:1.6s}
+/* 用户校验页 */
+.gate-ov{position:fixed;inset:0;z-index:110;background:radial-gradient(circle at 50% 20%,#1A1430,#050509 70%);
+  display:none;align-items:center;justify-content:center;padding:24px}
+.gate-ov.show{display:flex}
+.gate-card{width:100%;max-width:340px;background:rgba(18,19,31,.85);border:1px solid var(--line);border-radius:24px;
+  padding:30px 26px;backdrop-filter:blur(10px);animation:fadeUp .6s both}
+.gate-card.shake{animation:shakeX .4s ease}
+@keyframes shakeX{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.gate-logo{font-size:30px;font-weight:700;letter-spacing:10px;text-align:center;
+  background:linear-gradient(120deg,#FFE3C2,var(--terra));-webkit-background-clip:text;background-clip:text;color:transparent}
+.gate-sub{text-align:center;font-size:9.5px;letter-spacing:3px;color:var(--mut2);margin:8px 0 24px}
+.gate-card input{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:12px;
+  color:var(--ink);padding:13px 16px;font-size:14px;outline:none;margin-bottom:12px}
+.gate-card input:focus{border-color:rgba(232,135,90,.5)}
+.gate-card input.err{border-color:#D05050}
+.gate-roles{display:flex;gap:10px;margin-bottom:12px}
+.gate-roles button{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--mut);border-radius:12px;
+  padding:12px 0;font-size:12.5px;letter-spacing:2px;cursor:pointer;transition:.25s}
+.gate-roles button.on{border-color:var(--terra);color:var(--terra);background:rgba(232,135,90,.1)}
+.gate-err{min-height:20px;font-size:11px;color:#E87A7A;text-align:center;letter-spacing:1px}
+.gate-btn{width:100%;margin-top:6px;padding:15px;border:none;border-radius:999px;cursor:pointer;
+  background:linear-gradient(120deg,var(--terra),#D8704A);color:#1D0E05;font-size:14px;letter-spacing:4px;font-weight:600;
+  box-shadow:0 10px 30px -10px rgba(232,135,90,.55)}
+.gate-btn:active{transform:scale(.98)}
+/* toast */
+.toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%) translateY(8px);background:rgba(242,240,234,.96);color:#221D16;
+  font-size:11px;letter-spacing:1px;padding:11px 20px;border-radius:999px;opacity:0;transition:.35s;z-index:70;white-space:nowrap;pointer-events:none;max-width:88vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast.long{white-space:normal;text-align:center;line-height:1.8}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hd"><div class="wm">眠屿 <em>SLEEPISLE</em></div><div class="time" id="clock">--:--</div></div>
+
+  <!-- 主控 -->
+  <div class="pg on" id="pg-home">
+    <div class="greet" id="greet">晚上好</div>
+    <div class="greet-sub" id="planSub">今夜编排 · 日落 → 日出 07:00<span id="wxInline"></span></div>
+
+    <!-- 电子宠物（AI 插画掌机 · 实时屏幕叠加） -->
+    <div class="pet-zone">
+      <div class="bubble" id="bubble"><span id="bubbleText"></span></div>
+      <div class="gbx" id="tama">
+        <img class="gbx-art" src="pets/console.png" alt="掌机" draggable="false">
+        <div class="gbx-screen" id="gbScreen">
+          <div class="gbx-scene" id="gbScene"><div class="moon"></div></div>
+          <div class="gbx-hud"><span><b id="hudLv">LV 1</b> <span id="hudTitle">刚刚认识</span></span><span id="hudTime">--:--</span></div>
+          <div class="pet float" id="pet"><div id="petSVG" style="width:100%;height:100%"></div></div>
+          <div class="zzz" id="zzz" style="display:none"><span>Z</span><span>z</span><span>z</span></div>
+          <div class="gb-menu" id="gbMenu">
+            <div class="gm-item" data-m="feed">喂晚安茶</div>
+            <div class="gm-item" data-m="sheep">数羊助眠</div>
+            <div class="gm-item" data-m="game">猜拳游戏</div>
+            <div class="gm-item" data-m="timer">倒计时</div>
+            <div class="gm-item" data-m="clock">时钟屏保</div>
+            <div class="gm-item" data-m="sound">切换音景</div>
+            <div class="gm-item" data-m="study">学习乐园</div>
+          </div>
+          <div class="sheep-ov" id="sheepOv">
+            <div class="fence"></div>
+            <div class="sheep" id="sheep"></div>
+            <div class="sheep-n" id="sheepN"></div>
+            <div class="sheep-hint">按 B 或点屏幕结束</div>
+          </div>
+          <div class="rps-ov" id="rpsOv">
+            <div class="rps-title">猜拳 · 连胜有奖</div>
+            <div class="rps-stage"><div class="rps-hand" id="rpsPet">?</div><div class="rps-vs">VS</div><div class="rps-hand you" id="rpsYou">?</div></div>
+            <div class="rps-hint" id="rpsHint">← 石头 · ↑ 剪刀 · → 布　A 出拳 · B 退出</div>
+          </div>
+          <div class="rps-ov" id="tmrOv">
+            <div class="rps-title">倒计时</div>
+            <div class="tmr-num" id="tmrNum">10:00</div>
+            <div class="rps-hint" id="tmrHint">↑↓ 调分钟 · A 开始/暂停 · B 退出</div>
+          </div>
+          <div class="pass-ov" id="passOv">
+            <div class="pass-t" id="passT">要不要复习一下今天的单词？</div>
+            <div class="pass-btns"><button class="ok" id="passYes">好呀</button><button id="passNo">不用啦</button></div>
+          </div>
+          <div class="hearts" id="hearts"></div>
+        </div>
+        <div class="gbx-stats">
+          <div class="stat"><span>心情</span><div class="pips" id="pipMood"></div></div>
+          <div class="stat"><span>精力</span><div class="pips" id="pipEnergy"></div></div>
+          <div class="stat"><span>亲密</span><div class="pips" id="pipBond"></div></div>
+        </div>
+        <div class="gbx-led" id="gbLed"></div>
+        <button class="gbx-hit" data-dp="up"    style="left:22%;top:59.5%;width:9%;height:5.5%" aria-label="上"></button>
+        <button class="gbx-hit" data-dp="down"  style="left:22%;top:70.3%;width:9%;height:5.2%" aria-label="下"></button>
+        <button class="gbx-hit" data-dp="left"  style="left:13.5%;top:62.6%;width:9%;height:8%" aria-label="左"></button>
+        <button class="gbx-hit" data-dp="right" style="left:30.6%;top:62.6%;width:9%;height:8%" aria-label="右"></button>
+        <button class="gbx-hit" data-ab="a" style="left:71.5%;top:59.4%;width:13.5%;height:8.4%" aria-label="A"></button>
+        <button class="gbx-hit" data-ab="b" style="left:57%;top:63.3%;width:13.5%;height:8.4%" aria-label="B"></button>
+        <button class="gbx-hit" data-pill="select" style="left:35%;top:76.3%;width:13%;height:4.6%" aria-label="select"></button>
+        <button class="gbx-hit" data-pill="start"  style="left:50%;top:76.3%;width:13%;height:4.6%" aria-label="start"></button>
+      </div>
+      <div class="pet-name"><span id="petName">胖丁</span> <em id="petMood">· 你的哄睡伙伴</em></div>
+      <div class="pet-picker" id="petPicker"></div>
+    </div>
+
+    <div class="orb-zone">
+      <div class="orb">
+        <svg viewBox="0 0 230 230">
+          <circle cx="115" cy="115" r="106" stroke="rgba(255,255,255,.07)" stroke-width="3"/>
+          <circle id="rgSleep" cx="115" cy="115" r="106" stroke="#9D8CFF" stroke-width="3" stroke-dasharray="666" stroke-dashoffset="666"/>
+          <circle cx="115" cy="115" r="96" stroke="rgba(255,255,255,.07)" stroke-width="3"/>
+          <circle id="rgSound" cx="115" cy="115" r="96" stroke="#E8875A" stroke-width="3" stroke-dasharray="603" stroke-dashoffset="603"/>
+        </svg>
+        <div class="orb-core" id="orbCore">
+          <span class="st" id="orbSt">就绪</span>
+          <span class="md" id="orbMd">待机</span>
+          <span class="hint" id="orbHint">点下面按钮，开始今晚</span>
+        </div>
+      </div>
+      <div class="orb-meta"><span>睡眠深度 <b id="mSleep">—</b></span><span>音景 <b id="mSound">—</b></span><span>环境 <b id="mNoise">—</b></span></div>
+    </div>
+    <button class="btn-big" id="btnNight">开始晚安</button>
+    <div class="btn-row">
+      <button class="btn-sm" id="btnBreath">呼吸放松</button>
+      <button class="btn-sm" id="btnStory">睡前故事</button>
+      <button class="btn-sm" id="btnTalk">陪她聊聊</button>
+    </div>
+    <div class="chat-row">
+      <input id="chatIn" placeholder="打字也能聊，比如：我今天有点累">
+      <button id="chatSend">发送</button>
+    </div>
+    <div class="card">
+      <div class="card-t">AGENT 值守动态</div>
+      <div id="feed"><div class="li"><span class="k">系统</span><span class="d">待命中。开始晚安后，我整夜值守。</span></div></div>
+    </div>
+  </div>
+
+  <!-- 音景 -->
+  <div class="pg" id="pg-sound">
+    <div class="greet" style="margin-top:10px">音景</div>
+    <div class="greet-sub">程序实时合成，非录音循环 · 点击即播</div>
+    <div id="rcpList"></div>
+    <div class="card" style="margin-top:18px">
+      <div class="card-t">音量</div>
+      <input type="range" id="vol" min="0" max="100" value="45" style="width:100%;accent-color:var(--terra)">
+    </div>
+    <div class="card">
+      <div class="card-t">定时关闭</div>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn-sm sleep-timer on" data-min="0">不限</button>
+        <button class="btn-sm sleep-timer" data-min="15">15 分</button>
+        <button class="btn-sm sleep-timer" data-min="30">30 分</button>
+        <button class="btn-sm sleep-timer" data-min="45">45 分</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 学习 -->
+  <div class="pg" id="pg-study">
+    <div class="greet" style="margin-top:10px">学习乐园</div>
+    <div class="greet-sub">白天多学一点，晚上睡得香一点</div>
+    <div class="seg">
+      <button class="seg-b on" data-seg="act">主动学习</button>
+      <button class="seg-b" data-seg="pass">被动磨耳朵</button>
+    </div>
+    <div id="segAct">
+      <div class="card">
+        <div class="card-t">今日进度</div>
+        <div class="study-stats">
+          <div class="ss"><b id="stWords">0</b><span>单词</span></div>
+          <div class="ss"><b id="stIdiom">0</b><span>成语连胜</span></div>
+          <div class="ss"><b id="stMath">0</b><span>口算连胜</span></div>
+          <div class="ss"><b id="stFocus">0</b><span>专注分钟</span></div>
+        </div>
+      </div>
+      <div class="study-grid">
+        <button data-mod="word">背单词<span>每日 10 词</span></button>
+        <button data-mod="read">英语跟读<span>跟读打分</span></button>
+        <button data-mod="idiom">成语接龙<span>和它对战</span></button>
+        <button data-mod="math">口算挑战<span>越算越清醒</span></button>
+        <button data-mod="poem">睡前古诗<span>听了就睡</span></button>
+        <button data-mod="focus">番茄专注<span>25 分钟</span></button>
+      </div>
+      <div class="card study-stage" id="studyStage" style="display:none"></div>
+    </div>
+    <div id="segPass" style="display:none">
+      <div class="card">
+        <div class="card-t">睡前被动复习</div>
+        <div class="li"><span class="k">哄睡中邀请</span><span class="d">晚安后它会问你要不要复习 <span class="tgl" id="passTgl"></span></span></div>
+        <div class="li"><span class="k">复习内容</span><span class="d">你不熟的单词 + 一首古诗，轻声读给你听</span></div>
+      </div>
+      <div class="card">
+        <div class="card-t">弱词本 · 它记得你不熟的词</div>
+        <div id="weakList" style="font-size:12px;color:var(--mut);line-height:2"></div>
+        <button class="btn-sm" id="passNow" style="width:100%;margin-top:10px">现在就听一遍</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 商城 -->
+  <div class="pg" id="pg-shop">
+    <div class="greet" style="margin-top:10px">商城</div>
+    <div class="greet-sub">按时睡觉、按时起床赚金币，给它买好吃的</div>
+    <div class="coin-card">
+      <div class="coin-num"><b id="coinNum">0</b><span>金币</span></div>
+      <div class="coin-tips">按时睡觉 +30 · 按时起床 +30 · 睡满一晚 +10 · 学习 +5~10 · 升级 +15</div>
+    </div>
+    <div id="shopList"></div>
+  </div>
+
+  <!-- 报告 -->
+  <div class="pg" id="pg-report">
+    <div class="greet" style="margin-top:10px">睡眠报告</div>
+    <div class="greet-sub" id="rptDate">昨夜</div>
+    <div id="rptBody">
+      <div class="empty">还没有数据<br>今晚用「开始晚安」睡一觉<br>明早这里就有你的第一份报告</div>
+    </div>
+  </div>
+
+  <!-- 我的 -->
+  <div class="pg" id="pg-me">
+    <div class="greet" style="margin-top:10px">我的</div>
+    <div class="card">
+      <div class="card-t">唤醒</div>
+      <div class="li"><span class="k">睡觉时间</span><span class="d"><input type="time" id="bedTime" value="23:00" style="background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 10px;font-size:12px"></span></div>
+      <div class="li"><span class="k">起床闹钟</span><span class="d"><input type="time" id="wakeTime" value="07:00" style="background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 10px;font-size:12px"></span></div>
+      <div class="li"><span class="k">浅睡窗口</span><span class="d">提前 20 分钟检测浅睡再叫你</span></div>
+    </div>
+    <div class="card">
+      <div class="card-t">闹钟 · 提醒（可加多个）</div>
+      <div id="alarmList"></div>
+      <div class="alarm-add">
+        <input type="time" id="alTime" value="07:30">
+        <input id="alLabel" placeholder="备注，如：喝水" maxlength="10">
+        <button id="alAdd">添加</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-t">隐私</div>
+      <div class="li"><span class="k">本地闭环</span><span class="d">全部计算在本机完成</span></div>
+      <div class="li"><span class="k">麦克风</span><span class="d" id="micState">仅在你点「按住说话」时启用</span></div>
+    </div>
+    <div class="card">
+      <div class="card-t">陪伴记录</div>
+      <div class="li"><span class="k">已陪伴</span><span class="d" id="nightCount">0 晚</span></div>
+    </div>
+    <div class="card">
+      <div class="card-t">用户 · 已通过校验</div>
+      <div id="userCard"></div>
+    </div>
+    <div class="card">
+      <div class="card-t">给它起个名字</div>
+      <div class="chat-row" style="margin-top:0">
+        <input id="nickIn" placeholder="输入它的新名字" maxlength="8">
+        <button id="nickSave">保存</button>
+      </div>
+      <div style="font-size:9px;color:var(--mut2);margin-top:8px;line-height:1.7">改名后，界面、对话、睡前故事里都会用新名字。</div>
+    </div>
+    <div class="card">
+      <div class="card-t">成就墙 · <span id="achvCnt">0</span> / 10</div>
+      <div class="achv-grid" id="achvGrid"></div>
+    </div>
+    <div class="card">
+      <div class="card-t">声音 · 小眠的嗓音</div>
+      <div class="li"><span class="k">嗓音</span><span class="d"><select id="voiceSel" style="max-width:170px;background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 8px;font-size:11px"></select></span></div>
+      <div class="li"><span class="k">语速</span><span class="d"><input type="range" id="vRate" min="0.6" max="1.2" step="0.05" style="width:130px;accent-color:var(--terra)"> <span id="vRateT" style="font-size:10px;color:var(--mut2)"></span></span></div>
+      <div class="li"><span class="k">音调</span><span class="d"><input type="range" id="vPitch" min="0.7" max="1.3" step="0.05" style="width:130px;accent-color:var(--terra)"> <span id="vPitchT" style="font-size:10px;color:var(--mut2)"></span></span></div>
+      <button class="btn-sm" id="vTest" style="width:100%;margin-top:10px">试听：「晚安，做个好梦呀」</button>
+      <div style="font-size:9px;color:var(--mut2);margin-top:8px;line-height:1.7">不同浏览器/系统自带嗓音不同；iPhone 可在 设置→辅助功能→朗读内容 下载「优化版」嗓音会更好听。</div>
+    </div>
+    <div class="card">
+      <div class="card-t">自由对话（可选 · 接入大模型后她能聊任何话题）</div>
+      <div class="li"><span class="k">API Key</span><span class="d"><input id="llmKey" type="password" placeholder="sk-..." style="width:150px;background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 10px;font-size:11px"></span></div>
+      <div class="li"><span class="k">接口</span><span class="d"><input id="llmEp" placeholder="https://api.moonshot.cn/v1/chat/completions" style="width:150px;background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 10px;font-size:11px"></span></div>
+      <div class="li"><span class="k">模型</span><span class="d"><input id="llmModel" placeholder="kimi-k2-0905-preview" style="width:150px;background:var(--card2);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:6px 10px;font-size:11px"></span></div>
+      <button class="btn-sm" id="llmSave" style="width:100%;margin-top:10px">保存（仅存本机）</button>
+      <div style="font-size:9px;color:var(--mut2);margin-top:8px;line-height:1.7">不填则使用内置温柔应答；填入后对话由大模型驱动，key 只存在你手机里。</div>
+    </div>
+    <div class="card"><div class="card-t">关于</div>
+      <div class="li"><span class="k">版本</span><span class="d">眠屿 S1 · 软件原型 v1.8（用户校验 + 流程重制）</span></div>
+      <div class="li" style="cursor:pointer" id="replayStory"><span class="k">重温开场故事</span><span class="d" style="color:var(--terra)">再穿越一次 →</span></div>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <div class="tb on" data-tab="home"><i></i>主控</div>
+    <div class="tb" data-tab="sound"><i></i>音景</div>
+    <div class="tb" data-tab="study"><i></i>学习</div>
+    <div class="tb" data-tab="shop"><i></i>商城</div>
+    <div class="tb" data-tab="report"><i></i>报告</div>
+    <div class="tb" data-tab="me"><i></i>我的</div>
+  </div>
+</div>
+
+<div class="ov" id="ovSunset"></div>
+<div class="ov" id="ovDark"></div>
+<div class="ov" id="ovSunrise"></div>
+<div class="ov" id="ovFlash"></div>
+<div class="breath-ui" id="breathUI">
+  <button class="breath-x" id="breathX">退出</button>
+  <div class="breath-c" id="breathC"></div>
+  <div class="breath-t" id="breathT">准备</div>
+  <div class="breath-n" id="breathN"></div>
+</div>
+<!-- 时钟屏保：放床头当闹钟用 -->
+<div class="scr-ov" id="scrOv">
+  <div class="scr-time" id="scrTime">--:--</div>
+  <div class="scr-date" id="scrDate"></div>
+  <div class="scr-pet"><img id="scrPetImg" alt=""></div>
+  <div class="scr-info" id="scrInfo"></div>
+  <div class="scr-hint">点任意处退出屏保</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- 开场故事 -->
+<div class="story-ov" id="storyOv">
+  <div class="story-bg" id="storyBg"></div>
+  <div class="story-vig"></div>
+  <button class="story-skip" id="storySkip">跳过 ›</button>
+  <div class="story-body">
+    <div class="story-pets" id="storyPets"></div>
+    <button class="story-go" id="storyGo">就是它了</button>
+    <div class="story-text" id="storyText"></div>
+    <div class="story-hint" id="storyHint">轻触继续</div>
+  </div>
+</div>
+
+<!-- 用户校验：先认识你，再开始穿越 -->
+<div class="gate-ov" id="gateOv">
+  <div class="gate-card" id="gateCard">
+    <div class="gate-logo">眠屿</div>
+    <div class="gate-sub">SLEEPISLE · 先认识一下你</div>
+    <input id="gateName" placeholder="怎么称呼你？（2-8 个字）" maxlength="8">
+    <div class="gate-roles" id="gateRoles">
+      <button data-role="self" class="on">我自己睡</button>
+      <button data-role="kid">陪孩子睡</button>
+    </div>
+    <div id="gateKid" style="display:none">
+      <input id="gateKidName" placeholder="孩子的昵称（1-8 个字）" maxlength="8">
+      <input id="gateAge" type="number" min="3" max="12" placeholder="孩子年龄（3-12 岁）">
+    </div>
+    <div class="gate-err" id="gateErr"></div>
+    <button class="gate-btn" id="gateGo">校验身份 · 开始穿越</button>
+  </div>
+</div>
+<script>
+/* ==================================================================
+ * 眠屿 m.html —— 真实可用的哄睡 Agent（手机端）
+ * 真音频（Web Audio 实时合成）、真语音（TTS + 识别）、真 Agent 闭环
+ * ================================================================== */
+const CONFIG = {
+  sunsetMinutes: 8, fadeInSec: 4, autoFadeMinutes: 20,
+  breathCycles: 6, breathRatio: [4, 7, 8],
+  voiceRate: 0.82, voicePitch: 0.95,
+  noiseHighDb: 45, noiseCalmDb: 34,
+  agentTickMs: 3000,
+};
+let demoSpeed = 1;
+const T = s => s * 1000 / demoSpeed;
+const $ = id => document.getElementById(id);
+
+const state = { asleep:false, timers:[], session:null };
+const sim = { breath:14.2, breathTarget:14.2, noise:32, spikeUntil:0, spikeDb:0, stage:'清醒' };
+let micDb = null;   // 真麦克风读数（可用时优先于模拟值）
+
+function later(sec, fn){ const id = setTimeout(fn, T(sec)); state.timers.push(id); return id; }
+function clearTimers(){ state.timers.forEach(clearTimeout); state.timers=[]; }
+function nowHM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+let toastTimer=null;
+function toast(msg, long){ const el=$('toast'); el.textContent=msg; el.className='toast show'+(long?' long':'');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'), long?4200:2200); }
+function feed(k, d){
+  const el=document.createElement('div'); el.className='li';
+  el.innerHTML=`<span class="k">${k}</span><span class="d">${d}</span>`;
+  $('feed').prepend(el);
+  while($('feed').children.length>12) $('feed').lastChild.remove();
+}
+function setOrb(cls, md, st, hint){
+  $('orbCore').className='orb-core '+cls;
+  if(md!==undefined) $('orbMd').textContent=md;
+  if(st!==undefined) $('orbSt').textContent=st;
+  if(hint!==undefined) $('orbHint').textContent=hint;
+}
+
+/* ---------- 语音（小眠的嗓音：优选最好听的中文声音） ---------- */
+let zhVoice=null;
+const VOICE_PREF=['Google 普通话','Xiaoxiao','晓晓','Yunxi','云希','Xiaoyi','Mei-Jia','美佳','Ting-Ting','婷婷','Sinji','Siri','Super'];
+function zhVoices(){ return speechSynthesis.getVoices().filter(v=>v.lang && v.lang.toLowerCase().replace('_','-').startsWith('zh')); }
+function pickVoice(){
+  const vs=zhVoices();
+  const saved=localStorage.getItem('sle_voice');
+  zhVoice = (saved && vs.find(v=>v.name===saved))
+    || vs.find(v=>VOICE_PREF.some(p=>v.name.includes(p)))
+    || vs.find(v=>/cn|cmn/i.test(v.lang)) || vs[0] || null;
+}
+speechSynthesis.onvoiceschanged=()=>{ pickVoice(); fillVoiceSel(); };
+pickVoice();
+function voiceCfg(){ return {
+  rate: +(localStorage.getItem('sle_vrate')||CONFIG.voiceRate),
+  pitch:+(localStorage.getItem('sle_vpitch')||CONFIG.voicePitch) }; }
+function speak(text){
+  const u=new SpeechSynthesisUtterance(text);
+  const c=voiceCfg();
+  u.lang='zh-CN'; u.rate=c.rate; u.pitch=Math.min(2, c.pitch*((typeof PETS!=='undefined'&&PETS[curPet])?PETS[curPet].pitch:1));
+  if(zhVoice) u.voice=zhVoice;
+  speechSynthesis.speak(u);
+}
+
+/* ---------- 音景引擎（五层实时合成） ---------- */
+let AC=null, master=null;
+function audio(){
+  if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=$('vol').value/100;
+    master.connect(AC.destination);
+    /* 柔和厅堂混响：让合成音景更润 */
+    const conv=AC.createConvolver(); conv.buffer=impulse(1.8, 3.0);
+    const wet=AC.createGain(); wet.gain.value=0.22;
+    master.connect(conv); conv.connect(wet); wet.connect(AC.destination); }
+  if(AC.state==='suspended') AC.resume();
+}
+function impulse(dur, decay){
+  const rate=AC.sampleRate, len=rate*dur, buf=AC.createBuffer(2,len,rate);
+  for(let c=0;c<2;c++){ const d=buf.getChannelData(c);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay); }
+  return buf;
+}
+const NB={};
+function nb(type){
+  if(NB[type]) return NB[type];
+  const len=AC.sampleRate*2, buf=AC.createBuffer(2,len,AC.sampleRate);
+  for(let c=0;c<2;c++){ const d=buf.getChannelData(c);
+    if(type==='white'){ for(let i=0;i<len;i++) d[i]=Math.random()*2-1; }
+    else if(type==='brown'){ let last=0;
+      for(let i=0;i<len;i++){ last=(last+0.02*(Math.random()*2-1))/1.02; d[i]=last*3.5; } }
+    else { let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for(let i=0;i<len;i++){ const w=Math.random()*2-1;
+        b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.075076; b2=0.969*b2+w*0.153852;
+        b3=0.8665*b3+w*0.3104856;  b4=0.55*b4+w*0.5329522;   b5=-0.7616*b5-w*0.016898;
+        d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11; b6=w*0.115926; } }
+  }
+  return NB[type]=buf;
+}
+function makeLayer(){ const g=AC.createGain(); g.gain.value=0; g.connect(master); return {g, nodes:[], timers:[]}; }
+function clearLayer(L, fade=1){
+  try{ L.g.gain.cancelScheduledValues(AC.currentTime);
+    L.g.gain.setValueAtTime(L.g.gain.value, AC.currentTime);
+    L.g.gain.linearRampToValueAtTime(0, AC.currentTime+fade); }catch(e){}
+  const ns=L.nodes, ts=L.timers;
+  setTimeout(()=>{ ns.forEach(n=>{try{n.stop()}catch(e){}}); ts.forEach(clearInterval); }, fade*1000+200);
+  L.nodes=[]; L.timers=[];
+}
+function layerTo(L, v, sec=2.5){
+  if(!L) return;
+  const g=L.g.gain;
+  g.cancelScheduledValues(AC.currentTime); g.setValueAtTime(g.value, AC.currentTime);
+  g.linearRampToValueAtTime(Math.max(0,v), AC.currentTime+sec);
+}
+function addNoiseTo(L, type, filters, level){
+  const src=AC.createBufferSource(); src.buffer=nb(type); src.loop=true;
+  let node=src;
+  filters.forEach(f=>{ const fl=AC.createBiquadFilter(); fl.type=f.type; fl.frequency.value=f.frequency; if(f.Q) fl.Q.value=f.Q; node.connect(fl); node=fl; });
+  const ng=AC.createGain(); ng.gain.value=level; node.connect(ng); ng.connect(L.g);
+  src.start(); L.nodes.push(src);
+  return ng;
+}
+function addLFO(L, param, freq, depth){
+  const lfo=AC.createOscillator(), lg=AC.createGain();
+  lfo.frequency.value=freq; lg.gain.value=depth; lfo.connect(lg); lg.connect(param); lfo.start(); L.nodes.push(lfo);
+}
+const scape={ built:false, recipe:null, levels:null };
+function buildScape(){
+  if(scape.built) return;
+  audio();
+  scape.base=makeLayer(); scape.tex=makeLayer(); scape.mask=makeLayer();
+  scape.detail=makeLayer(); scape.birds=makeLayer();
+  addNoiseTo(scape.mask,'brown',[{type:'lowpass',frequency:600}],0.9);
+  scape.built=true;
+}
+function startDetail(kind){
+  const L=scape.detail;
+  if(kind==='rain') L.timers.push(setInterval(()=>{ if(Math.random()<0.5){
+    const o=AC.createOscillator(), og=AC.createGain();
+    o.frequency.value=2500+Math.random()*3000; og.gain.setValueAtTime(0.05,AC.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.05);
+    o.connect(og); og.connect(L.g); o.start(); o.stop(AC.currentTime+0.06); } }, 130));
+  if(kind==='fire') L.timers.push(setInterval(()=>{ if(Math.random()<0.4){
+    const src=AC.createBufferSource(); src.buffer=nb('white');
+    const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500+Math.random()*2500; bp.Q.value=2;
+    const cg=AC.createGain(); cg.gain.setValueAtTime(0.22,AC.currentTime);
+    cg.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.08);
+    src.connect(bp); bp.connect(cg); cg.connect(L.g); src.start(); src.stop(AC.currentTime+0.09); } }, 320));
+  if(kind==='cricket') L.timers.push(setInterval(()=>{ if(Math.random()<0.6){
+    const t0=AC.currentTime;
+    for(let p=0;p<3;p++){ const o=AC.createOscillator(), og=AC.createGain();
+      o.type='sine'; o.frequency.value=4200+Math.random()*400;
+      og.gain.setValueAtTime(0,t0+p*0.09);
+      og.gain.linearRampToValueAtTime(0.05,t0+p*0.09+0.02);
+      og.gain.exponentialRampToValueAtTime(0.001,t0+p*0.09+0.07);
+      o.connect(og); og.connect(L.g); o.start(t0+p*0.09); o.stop(t0+p*0.09+0.08); } } }, 900));
+}
+const RECIPES={
+  cabin:{   name:'雨夜木屋', ds:'细雨 · 壁炉噼啪 · 棕噪铺底', mix:[72,26,48], levels:{base:.25,tex:.7,detail:.5},
+    build(){ addNoiseTo(scape.tex,'white',[{type:'bandpass',frequency:2000,Q:.4}],.55); addNoiseTo(scape.tex,'pink',[{type:'lowpass',frequency:400}],.25); startDetail('rain'); } },
+  seaside:{ name:'海边小屋', ds:'海浪 LFO 0.09Hz · 粉红铺底', mix:[85,20,0], levels:{base:.2,tex:.85,detail:0},
+    build(){ const g=addNoiseTo(scape.tex,'brown',[{type:'lowpass',frequency:500}],.9); addLFO(scape.tex,g.gain,.09,.4); } },
+  forest:{  name:'林间篝火', ds:'柴火噼啪程序生成 · 永不重复', mix:[70,20,55], levels:{base:.2,tex:.7,detail:.55},
+    build(){ addNoiseTo(scape.tex,'brown',[{type:'lowpass',frequency:320}],.6); const w=addNoiseTo(scape.tex,'pink',[{type:'bandpass',frequency:400,Q:1.2}],.4); addLFO(scape.tex,w.gain,.06,.25); startDetail('fire'); } },
+  plain:{   name:'纯底噪',   ds:'棕噪音 · 极简', mix:[0,70,0], levels:{base:.7,tex:0,detail:0}, build(){} },
+  cricket:{ name:'夏夜虫鸣', ds:'蟋蟀程序鸣唱 · 晚风拂叶', mix:[55,30,50], levels:{base:.22,tex:.5,detail:.5},
+    build(){ const w=addNoiseTo(scape.tex,'pink',[{type:'bandpass',frequency:600,Q:.8}],.35); addLFO(scape.tex,w.gain,.12,.15); startDetail('cricket'); } },
+  fan:{     name:'老式风扇', ds:'叶片匀速摆动 · 低频嗡鸣', mix:[80,25,0], levels:{base:.55,tex:.4,detail:0},
+    build(){ const g=addNoiseTo(scape.tex,'brown',[{type:'lowpass',frequency:800}],.8); addLFO(scape.tex,g.gain,.5,.3);
+      const o=AC.createOscillator(), og=AC.createGain(); o.type='triangle'; o.frequency.value=110; og.gain.value=.05;
+      o.connect(og); og.connect(scape.tex.g); o.start(); scape.tex.nodes.push(o); } },
+};
+function setRecipe(key){
+  const r=RECIPES[key]; if(!r) return;
+  buildScape();
+  clearLayer(scape.base); clearLayer(scape.tex); clearLayer(scape.detail);
+  scape.base=makeLayer(); scape.tex=makeLayer(); scape.detail=makeLayer();
+  addNoiseTo(scape.base,'brown',[{type:'lowpass',frequency:350}],.8);
+  r.build();
+  scape.recipe=key; scape.levels={...r.levels};
+  layerTo(scape.base, r.levels.base, CONFIG.fadeInSec);
+  layerTo(scape.tex,  r.levels.tex,  CONFIG.fadeInSec);
+  layerTo(scape.detail, r.levels.detail, CONFIG.fadeInSec);
+  renderRecipes();
+  updateMeta();
+}
+function stopScape(){
+  if(!scape.built) return;
+  ['base','tex','detail','mask','birds'].forEach(k=>clearLayer(scape[k]));
+  scape.recipe=null; renderRecipes(); updateMeta();
+}
+
+/* ---------- 音景列表 ---------- */
+function renderRecipes(){
+  const box=$('rcpList'); box.innerHTML='';
+  Object.entries(RECIPES).forEach(([k,r])=>{
+    const live=scape.recipe===k;
+    const el=document.createElement('div');
+    el.className='rcp'+(live?' live':'');
+    el.innerHTML=`<div class="inf"><div class="nm">${r.name}${k==='cabin'?'<span class="tag">首推</span>':''}</div>
+      <div class="ds">${r.ds}</div>
+      <div class="mix">${r.mix.map(w=>`<i style="--w:${w}%"></i>`).join('')}</div></div>
+      <button class="pbtn"><span class="tri"></span></button>`;
+    el.querySelector('.pbtn').onclick=()=>{ if(scape.recipe===k){ stopScape(); toast('音景已停止'); } else { setRecipe(k); toast(r.name+' · 淡入中'); } };
+    box.appendChild(el);
+  });
+}
+
+/* ---------- 环境噪音：真麦克风优先，其次模拟 ---------- */
+async function initMic(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    audio();
+    const src=AC.createMediaStreamSource(stream), an=AC.createAnalyser();
+    an.fftSize=512; src.connect(an);
+    const data=new Float32Array(an.fftSize);
+    setInterval(()=>{
+      an.getFloatTimeDomainData(data);
+      let s=0; for(let i=0;i<data.length;i++) s+=data[i]*data[i];
+      const rms=Math.sqrt(s/data.length);
+      micDb=Math.max(20, Math.min(90, 20*Math.log10(rms*8)+60));  // 粗略标定
+      $('micState').textContent='已启用 · 仅本地分析，不录音不上传';
+    }, 1000);
+  }catch(e){ /* 无权限/非安全上下文 → 用模拟值 */ }
+}
+function currentNoise(){ return micDb!==null ? micDb : sim.noise; }
+
+/* ---------- 传感器模拟（呼吸/阶段） ---------- */
+setInterval(()=>{
+  sim.breath += (sim.breathTarget-sim.breath)*0.06 + (Math.random()-0.5)*0.4;
+  if(micDb===null){
+    sim.noise = Date.now()<sim.spikeUntil ? sim.spikeDb+(Math.random()-0.5)*4 : 29+Math.random()*6;
+  }
+  $('mNoise').textContent = Math.round(currentNoise())+'dB';
+  const depth={清醒:0,浅睡:.35,深睡:.85,REM:.55}[sim.stage]||0;
+  $('rgSleep').style.strokeDashoffset=666*(1-depth);
+  $('mSleep').textContent=sim.stage;
+}, 1000);
+function updateMeta(){
+  const mix=scape.built&&scape.recipe ? Math.round((scape.levels.tex+scape.levels.base+scape.levels.detail)/2.4*100) : 0;
+  $('rgSound').style.strokeDashoffset=603*(1-Math.min(1,mix/100));
+  $('mSound').textContent=scape.recipe?RECIPES[scape.recipe].name:'—';
+}
+
+/* ---------- Agent 闭环 ---------- */
+let maskGain=0, fadePlanOn=false, lastStage='清醒';
+const STAGE_LEVELS={清醒:{tex:1,detail:1,base:1},浅睡:{tex:.7,detail:.6,base:.9},深睡:{tex:.25,detail:.2,base:.6},REM:{tex:.4,detail:.3,base:.8}};
+setInterval(()=>{
+  const playing=scape.built&&scape.recipe;
+  const noise=currentNoise(), stage=sim.stage;
+  // R1 噪音遮蔽
+  if(playing){
+    if(noise>CONFIG.noiseHighDb && maskGain<0.5){
+      maskGain=Math.min(.5,maskGain+.12); layerTo(scape.mask,maskGain);
+      feed(nowHM(),`环境噪音 ${Math.round(noise)}dB → 遮蔽层推至 ${Math.round(maskGain*100)}%`);
+      if(state.session) state.session.masked++;
+    } else if(noise<CONFIG.noiseCalmDb && maskGain>0){
+      maskGain=Math.max(0,maskGain-.05); layerTo(scape.mask,maskGain,5);
+      if(maskGain===0) feed(nowHM(),'环境恢复安静 → 遮蔽层收回');
+    }
+  }
+  // R4 阶段换挡 + R5 渐弱计划
+  if(stage!==lastStage){
+    lastStage=stage;
+    if(playing){
+      const L=STAGE_LEVELS[stage];
+      layerTo(scape.tex, scape.levels.tex*L.tex, 6);
+      layerTo(scape.detail, scape.levels.detail*L.detail, 6);
+      layerTo(scape.base, scape.levels.base*L.base, 6);
+      feed(nowHM(), `进入【${stage}】→ 混音策略换挡`);
+    }
+    if((stage==='浅睡'||stage==='深睡') && state.asleep && !fadePlanOn){
+      fadePlanOn=true;
+      feed(nowHM(), `判定入睡 → 启动 ${CONFIG.autoFadeMinutes} 分钟渐弱计划`);
+      const steps=8;
+      const iv=setInterval(()=>{
+        if(!scape.recipe){ clearInterval(iv); return; }
+        ['tex','detail','base'].forEach(k=>{ layerTo(scape[k], scape[k].g.gain.value*0.72, CONFIG.autoFadeMinutes*60/steps/demoSpeed); });
+        maskGain*=.72; layerTo(scape.mask,maskGain,CONFIG.autoFadeMinutes*60/steps/demoSpeed);
+      }, T(CONFIG.autoFadeMinutes*60/steps));
+      state.timers.push(iv);
+      later(CONFIG.autoFadeMinutes+5, ()=>{ if(scape.recipe){ stopScape(); feed(nowHM(),'渐弱完成 → 静默值守'); } });
+    }
+  }
+}, CONFIG.agentTickMs);
+
+/* ---------- 睡眠进程（模拟分期，未来换雷达） ---------- */
+function startSleepCycle(){
+  sim.stage='清醒'; sim.breathTarget=13.5; lastStage='清醒';
+  const seq=[ [20,'浅睡',11], [45,'深睡',8], [90,'REM',10.5], [150,'浅睡',11], [210,'深睡',8], [300,'REM',10.5] ];
+  seq.forEach(([min,st,br])=>later(min*60, ()=>{ if(state.asleep){ sim.stage=st; sim.breathTarget=br; if(state.session) state.session.stages.push([st,Date.now()]); } }));
+}
+
+/* ---------- 灯光（屏幕即灯） ---------- */
+function sunset(){
+  setOrb('warm','陪伴','日落进行中','灯光渐暗 · 雨声淡入');
+  $('ovSunset').style.opacity=.5;
+  const steps=CONFIG.sunsetMinutes*60/2; let i=0;
+  const iv=setInterval(()=>{
+    i++; const p=i/steps;
+    $('ovSunset').style.opacity=Math.max(0,.5*(1-p));
+    if(p>=1){ clearInterval(iv); $('ovSunset').style.opacity=0; $('ovDark').style.opacity=1;
+      setOrb('night','守护','睡眠守护中','点圆盘可叫我'); $('orbCore').classList.add('breathing'); petSleep(); setScene('night'); }
+  }, T(2));
+  state.timers.push(iv);
+}
+function sunrise(){
+  speechSynthesis.cancel();
+  $('ovDark').style.opacity=0;
+  setOrb('warm','唤醒','日出中','');
+  petWake(); setScene('dawn');
+  state.asleep=false; sim.stage='清醒'; sim.breathTarget=14; fadePlanOn=false;
+  let p=0; const iv=setInterval(()=>{
+    p+=.04; $('ovSunrise').style.opacity=Math.min(.65,p);
+    if(p>=.65){ clearInterval(iv); birdsong(); finishSession(); addCoin(30,'按时起床');
+      setTimeout(()=>{ $('ovSunrise').style.opacity=0; layerTo(scape.birds,0,8);
+        setOrb('','待机','就绪','点下面按钮，开始今晚'); $('orbCore').classList.remove('breathing'); setScene(''); }, T(25)); }
+  }, T(1));
+}
+function birdsong(){
+  buildScape(); layerTo(scape.birds,.5,3);
+  for(let k=0;k<10;k++){ later(k*1.1+Math.random(), ()=>{
+    const o=AC.createOscillator(), og=AC.createGain();
+    const f=2000+Math.random()*1500; o.frequency.setValueAtTime(f,AC.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f*1.4,AC.currentTime+.12);
+    og.gain.setValueAtTime(.07,AC.currentTime);
+    og.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.15);
+    o.connect(og); og.connect(scape.birds.g); o.start(); o.stop(AC.currentTime+.16);
+  }); }
+}
+
+/* ---------- 一键晚安 ---------- */
+function goodNight(){
+  audio(); clearTimers();
+  ['ovSunset','ovDark','ovSunrise'].forEach(id=>$(id).style.opacity=0);
+  state.asleep=true; fadePlanOn=false;
+  state.session={ startAt:Date.now(), masked:0, wakes:0, stages:[] };
+  speak('晚安。我为你把灯光调成日落，放一点雨声。今晚由我值守，安心睡吧。');
+  setEyes('happy'); petSay('晚安，做个好梦呀', false); nagLevel=0;
+  feed(nowHM(),'晚安流程启动 · 日落 + 雨夜木屋');
+  /* 按时睡觉奖励：睡觉时间 ±30 分钟内开始晚安 */
+  const bt=$('bedTime').value||'23:00'; const [bh,bm]=bt.split(':').map(Number);
+  const dn=new Date(), dm=dn.getHours()*60+dn.getMinutes();
+  let df=Math.abs(dm-(bh*60+bm)); df=Math.min(df,1440-df);
+  if(df<=30) later(3, ()=>addCoin(30,'按时睡觉'));
+  /* 睡前被动复习邀请 */
+  later(25, ()=>{ if(state.asleep && localStorage.getItem('sle_passive')!=='0') askPassive(); });
+  sunset();
+  later(2, ()=>setRecipe('cabin'));
+  later(10, startSleepCycle);
+  scheduleWake();
+  $('btnNight').textContent='结束今晚';
+}
+function endNight(){
+  clearTimers(); stopScape(); speechSynthesis.cancel();
+  ['ovSunset','ovDark','ovSunrise'].forEach(id=>$(id).style.opacity=0);
+  if(state.asleep){ finishSession(true); }
+  state.asleep=false; sim.stage='清醒'; sim.breathTarget=14.2; fadePlanOn=false;
+  setOrb('','待机','就绪','点下面按钮，开始今晚'); $('orbCore').classList.remove('breathing'); petIdle(); setScene('');
+  $('btnNight').textContent='开始晚安';
+}
+$('btnNight').onclick=()=>{ state.asleep ? endNight() : goodNight(); };
+$('orbCore').onclick=()=>{
+  if(state.asleep){
+    if(state.session) state.session.wakes++;
+    speak('我在。别急着看手机，深呼吸几次，安心睡。');
+    feed(nowHM(),'夜醒响应 → 音景 25% 陪护');
+    if(scape.built&&scape.recipe){ layerTo(scape.tex,.25,4); layerTo(scape.base,.3,4); }
+  } else toast('说「晚安」或点按钮开始');
+};
+
+/* ---------- 闹钟 ---------- */
+let wakeTimer=null;
+function scheduleWake(){
+  const v=$('wakeTime').value; if(!v) return;
+  const [h,m]=v.split(':').map(Number);
+  const now=new Date(), at=new Date(now); at.setHours(h,m,0,0);
+  if(at<=now) at.setDate(at.getDate()+1);
+  wakeTimer=setTimeout(sunrise, (at-now)/demoSpeed);
+  $('planSub').textContent=`今夜编排 · 日落 → 日出 ${v}`;
+}
+$('wakeTime').onchange=()=>{ localStorage.setItem('sle_wake',$('wakeTime').value); if(state.asleep){ clearTimeout(wakeTimer); scheduleWake(); } toast('闹钟已更新 '+$('wakeTime').value); };
+
+/* ---------- 会话结算 → 报告 ---------- */
+function finishSession(early){
+  const s=state.session; if(!s) return;
+  const mins=Math.max(1,Math.round((Date.now()-s.startAt)/60000*demoSpeed));
+  const deepMin=s.stages.filter(x=>x[0]==='深睡').length*25;
+  const score=Math.max(60,Math.min(98, 92 - s.wakes*4 - Math.max(0,25-mins/12) + (s.masked>0?2:0)));
+  const rpt={ date:new Date().toLocaleDateString('zh-CN'), mins, deep:Math.min(45,Math.round(deepMin/Math.max(1,mins)*100)||28),
+    wakes:s.wakes, masked:s.masked, score };
+  localStorage.setItem('sle_report', JSON.stringify(rpt));
+  const hist=(()=>{ try{ return JSON.parse(localStorage.getItem('sle_reports'))||[]; }catch(e){ return []; } })();
+  hist.push({ d:new Date().getDate(), score:rpt.score });
+  localStorage.setItem('sle_reports', JSON.stringify(hist.slice(-7)));
+  const n=+(localStorage.getItem('sle_nights')||0)+1;
+  localStorage.setItem('sle_nights', n);
+  care.bond=Math.min(100, care.bond+8); renderPips(); addXP(20); addCoin(10,'睡满一晚');
+  renderReport(); renderNights();
+  speak(`早上好。昨晚你睡了约 ${Math.floor(mins/60)} 小时 ${mins%60} 分钟`+(s.masked?`，我为你遮蔽了 ${s.masked} 次噪音`:'' )+'。新的一天开始了。');
+  if(early) toast('已结束 · 报告已生成');
+}
+function renderReport(){
+  const raw=localStorage.getItem('sle_report');
+  if(!raw) return;
+  const r=JSON.parse(raw);
+  $('rptDate').textContent=r.date+' · 昨夜';
+  $('rptBody').innerHTML=`
+    <div class="card"><div class="score-wrap">
+      <div class="sring"><svg viewBox="0 0 96 96">
+        <circle cx="48" cy="48" r="42" stroke="rgba(255,255,255,.07)" stroke-width="5" fill="none"/>
+        <circle cx="48" cy="48" r="42" stroke="#7FBF9B" stroke-width="5" fill="none" stroke-linecap="round"
+          stroke-dasharray="264" stroke-dashoffset="${264*(1-r.score/100)}"/></svg>
+        <div class="mid"><b>${r.score}</b><span>睡眠分</span></div></div>
+      <div class="kpis">
+        <div class="kpi"><div class="k">总时长</div><div class="v">${Math.floor(r.mins/60)}h ${r.mins%60}m</div></div>
+        <div class="kpi"><div class="k">深睡占比</div><div class="v">${r.deep}%</div></div>
+        <div class="kpi"><div class="k">夜醒</div><div class="v">${r.wakes} 次</div></div>
+        <div class="kpi"><div class="k">噪音遮蔽</div><div class="v">${r.masked} 次</div></div>
+      </div></div></div>
+    <div class="card"><div class="card-t">AGENT 昨夜值守</div>
+      <div class="li"><span class="k">遮蔽</span><span class="d">为你挡住 ${r.masked} 次环境噪音</span></div>
+      <div class="li"><span class="k">陪护</span><span class="d">夜醒响应 ${r.wakes} 次</span></div>
+      <div class="li"><span class="k">建议</span><span class="d">${r.wakes>1?'昨夜醒得偏多，今晚试试提前 15 分钟上床':'睡得不错，保持这个节奏'}</span></div>
+    </div>${renderHist()}`;
+}
+function renderHist(){
+  let hist=[];
+  try{ hist=JSON.parse(localStorage.getItem('sle_reports'))||[]; }catch(e){}
+  if(!hist.length) return '';
+  const bars=hist.map((h,i)=>`<div class="hb"><div class="hv">${h.score}</div>
+    <div class="bar${i===hist.length-1?' today':''}" style="height:${Math.round(h.score*0.62)}px"></div>
+    <div class="hd">${h.d}日</div></div>`).join('');
+  const avg=Math.round(hist.reduce((s,h)=>s+h.score,0)/hist.length);
+  return `<div class="card"><div class="card-t">近 ${hist.length} 晚趋势 · 平均 ${avg} 分</div><div class="hist">${bars}</div></div>`;
+}
+function renderNights(){ $('nightCount').textContent=(localStorage.getItem('sle_nights')||0)+' 晚'; }
+
+/* ---------- 呼吸练习 ---------- */
+$('btnBreath').onclick=()=>{
+  audio();
+  const ui=$('breathUI'); ui.style.display='flex';
+  const [inh,hold,exh]=CONFIG.breathRatio; let t=1;
+  $('breathT').textContent='准备，跟着光圈'; $('breathN').textContent='';
+  for(let c=0;c<CONFIG.breathCycles;c++){ const n=c;
+    later(t, ()=>{ $('breathT').textContent='吸气'; $('breathN').textContent=`第 ${n+1}/${CONFIG.breathCycles} 轮`;
+      $('breathC').style.transition=`transform ${T(inh)}ms ease-in-out`; $('breathC').style.transform='scale(1.45)'; });
+    t+=inh;
+    later(t, ()=>{ $('breathT').textContent='屏息'; });
+    t+=hold;
+    later(t, ()=>{ $('breathT').textContent='呼气';
+      $('breathC').style.transition=`transform ${T(exh)}ms ease-in-out`; $('breathC').style.transform='scale(1)'; });
+    t+=exh;
+  }
+  later(t+1, ()=>{ ui.style.display='none'; speak('很好。带着这个节奏，慢慢睡吧。'); });
+};
+$('breathX').onclick=()=>{ $('breathUI').style.display='none'; };
+
+/* ---------- 睡前故事 ---------- */
+const STORIES=[
+ '从前有一座很安静的小岛，岛上的灯塔每到夜里就亮起暖暖的光。守灯人有一只猫，猫从不捉老鼠，只负责在窗台上打呼。今晚，海面很平，风很轻，猫打了个哈欠，灯塔的光也慢慢、慢慢地暗了下来……',
+ '夜里的小火车要穿过一片森林。车厢里没有乘客，只有月光。火车开得很慢很慢，怕吵醒树梢上的鸟。你听着车轮的声音，哐当，哐当，像一首很旧很旧的摇篮曲……',
+ '云在天上走了一整天，累了。它找了一座山的肩膀，轻轻靠上去。山说，睡吧，我替你看着星星。于是云变成了薄薄的一层，盖在山顶，像一床被子。',
+ '有一只小狐狸，每天睡前都要把尾巴盖在鼻子尖上。今晚它找到一块最软的苔藓，蜷成一个小小的圆。森林把声音都收了回去，只留下它均匀的呼吸，一呼，一吸，天就快亮了。',
+ '深海里有一只会发光的水母，它游得很慢，很慢。小鱼问它急什么，它说，夜里最美的风景，只有慢慢游才能看见。于是小鱼也放慢了，跟着它，一明，一灭，一明，一灭……',
+ '老奶奶的阁楼里有一架旧纺车，纺的不是线，是月光。她每晚纺一小团，攒起来，给睡不着的孩子们织被子。今晚，她数了数篮子里的月光，轻声说：够织一条新的了，软软的，正好盖住你。'
+];
+let storyIdx=0;
+$('btnStory').onclick=()=>{ audio(); speak(STORIES[storyIdx++%STORIES.length]); toast('故事播放中 · 读给你听'); };
+
+/* ==================================================================
+ * 连续对话引擎 —— 不用每次按按钮，她一直在听
+ * 链路：听 → 暂停听 → 想（规则 / LLM）→ 说 → 说完继续听
+ * ================================================================== */
+const LLM_SYS='你是「小眠」，一只住在用户床头的小月亮精灵，职责是陪伴、督促按时睡觉、哄睡。说话风格：软萌简短，不超过40字，会撒娇，适当用「呀、啦、嘛、呢」语气词，绝不说教，不用emoji。用户深夜不睡时要温柔督促；用户说烦心事时先接住情绪再轻轻哄睡；不知道的事就软软地说不知道。';
+let convo=false, rec=null, listening=false, convoHist=[], silenceTimer=null;
+
+function handleCmd(t){
+  if(!t) return;
+  if(/晚安|要睡|睡觉/.test(t)) { if(!state.asleep) goodNight(); }
+  else if(/雨|木屋/.test(t)) setRecipe('cabin');
+  else if(/海/.test(t)) setRecipe('seaside');
+  else if(/篝火|森林/.test(t)) setRecipe('forest');
+  else if(/底噪|白噪音/.test(t)) setRecipe('plain');
+  else if(/停止|安静|别放/.test(t)){ stopScape(); speak('好，安静了。'); }
+  else if(/故事/.test(t)) $('btnStory').click();
+  else if(/呼吸|放松|焦虑/.test(t)) $('btnBreath').click();
+  else if(/几点/.test(t)) speak(state.asleep?'还早，再睡一会儿，我叫你。':'现在是'+nowHM());
+  else if(/唤醒|起床|早上好/.test(t)) sunrise();
+  else if(/你是谁|能做什么/.test(t)) speak('我是眠屿，你的哄睡伙伴。我会放音景、讲故事、陪你聊天，整夜守着你的睡眠。');
+  else converse(t);   // 其他一切 → 自由对话
+}
+/* 自由对话：优先 LLM（配了 key 的话），否则本地温柔应答 */
+async function converse(t){
+  convoHist.push({role:'user',content:t});
+  let reply=null;
+  const key=localStorage.getItem('sle_llm_key');
+  if(key){
+    try{
+      const ep=localStorage.getItem('sle_llm_ep')||'https://api.moonshot.cn/v1/chat/completions';
+      const model=localStorage.getItem('sle_llm_model')||'kimi-k2-0905-preview';
+      const r=await fetch(ep,{method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+        body:JSON.stringify({model,temperature:0.7,max_tokens:120,
+          messages:[{role:'system',content:sysPrompt()},...convoHist.slice(-8)]})});
+      const j=await r.json();
+      reply=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
+    }catch(e){ reply=null; }
+  }
+  if(!reply) reply=localReply(t);
+  convoHist.push({role:'assistant',content:reply});
+  addXP(2); statAdd('chat');
+  speak(reply);
+}
+function localReply(t){
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  if(/睡不着|失眠|翻身/.test(t)) return pick(['没关系呀，闭上眼睛，我陪着你呢。要不要放点雨声？','睡不着也不用急嘛，我在这儿。跟光圈做几次深呼吸好不好？']);
+  if(/累|疲惫|辛苦/.test(t)) return pick(['今天辛苦啦，现在什么都不用想，好好睡一觉吧。','累了就靠过来，今晚我守着你呀。']);
+  if(/烦|焦虑|压力|担心|害怕/.test(t)) return pick(['那些事明天再想嘛，今晚先交给我。','我懂我懂。先把烦恼放到床边，明早再捡也不迟呀。']);
+  if(/开心|高兴|太好了|棒/.test(t)) return pick(['真好呀！带着这份开心入睡，会做个甜甜的梦的。','那今晚的梦一定是草莓味的！']);
+  if(/无聊|陪我|聊聊|说话/.test(t)) return pick(['好呀好呀，我在听。今天有什么想说说的事吗？','我陪你呀，说说今天过得怎么样？']);
+  if(/喜欢|爱你|想你/.test(t)) return pick(['嘻嘻，我也喜欢陪着你的每个夜晚呀。','我一直都在的，每晚都在。']);
+  if(/谢谢|感谢/.test(t)) return '不用谢啦，这是我应该做的。睡吧睡吧。';
+  if(/明天|天气|新闻/.test(t)) return '这些明早我都讲给你听。现在嘛，先安心睡觉啦。';
+  if(/名字|叫什么/.test(t)) return `我叫${nick()}呀，是你的专属哄睡伙伴。`;
+  if(/饿|吃|夜宵/.test(t)) return '睡前吃东西会睡不好的哦，忍一忍，明早吃顿好的。';
+  return pick(['嗯嗯，我在听呢。','我在呀，慢慢说，不着急。','今晚就把它放下吧，有我守着呢。','说完我们就安心睡觉，好不好嘛。']);
+}
+/* 连续监听 */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function startConvo(){
+  if(!SR){ toast('这台设备不支持语音识别，用下面输入框打字聊吧'); return; }
+  audio();
+  convo=true;
+  $('btnTalk').textContent='结束对话';
+  $('btnTalk').style.borderColor='var(--terra)';
+  $('btnTalk').style.color='var(--terra)';
+  const led=document.querySelector('.gbx-led'); if(led) led.classList.add('on');
+  $('petMood').textContent='· 正在听你说…';
+  if(!rec){
+    rec=new SR(); rec.lang='zh-CN'; rec.interimResults=true; rec.continuous=true;
+    rec.onresult=e=>{
+      const res=e.results[e.results.length-1];
+      if(res.isFinal){ resetSilence(); handleCmd(res[0].transcript); }
+    };
+    rec.onend=()=>{ listening=false;
+      if(convo && !speechSynthesis.speaking) setTimeout(()=>{ if(convo) try{rec.start();listening=true;}catch(e){} }, 250); };
+    rec.onerror=ev=>{ listening=false;
+      if(ev.error==='not-allowed'){ stopConvo(); toast('麦克风权限被拒绝，请在浏览器设置里允许'); } };
+  }
+  try{ rec.start(); listening=true; }catch(e){}
+  setEyes('happy'); $('petMood').textContent='· 聊天中';
+  setOrb(state.asleep?'night':'','倾听','对话中','我在听，随时说');
+  speak('好，我听着呢。想聊什么？');
+  resetSilence();
+}
+function stopConvo(){
+  convo=false; listening=false;
+  clearTimeout(silenceTimer);
+  try{ rec&&rec.stop(); }catch(e){}
+  $('btnTalk').textContent='陪她聊聊';
+  $('btnTalk').style.borderColor=''; $('btnTalk').style.color='';
+  const led=document.querySelector('.gbx-led'); if(led) led.classList.remove('on');
+  if(state.asleep) petSleep(); else petIdle();
+  setOrb(state.asleep?'night':'', state.asleep?'守护':'待机', state.asleep?'睡眠守护中':'就绪', state.asleep?'点圆盘可叫我':'点下面按钮，开始今晚');
+}
+function resetSilence(){
+  clearTimeout(silenceTimer);
+  silenceTimer=setTimeout(()=>{ if(convo){ speak('我先不打扰你了，想我就叫我。'); stopConvo(); } }, 90000);
+}
+/* TTS 说完 → 恢复监听（避免她听到自己的声音） */
+const _origSpeak=speak;
+speak=function(text){
+  if(convo && rec && listening){ try{rec.stop();}catch(e){} listening=false; }
+  _origSpeak(text);
+};
+// 包装：说话结束后回到监听
+function resumeAfterSpeak(){
+  if(convo && !listening){ setTimeout(()=>{ if(convo) try{rec.start();listening=true;}catch(e){} }, 400); }
+}
+$('btnTalk').onclick=()=>{ convo ? (speak('好，那我不打扰你了。'), stopConvo()) : startConvo(); };
+/* 文字聊天兜底（语音不可用时也能聊） */
+function sendChat(){
+  const v=$('chatIn').value.trim(); if(!v) return;
+  $('chatIn').value='';
+  audio();
+  petSay('嗯嗯，我听着呢', false);
+  handleCmd(v);
+}
+$('chatSend').onclick=sendChat;
+$('chatIn').addEventListener('keydown',e=>{ if(e.key==='Enter') sendChat(); });
+// 每当 TTS 队列清空，尝试恢复监听
+setInterval(()=>{ if(convo && !speechSynthesis.speaking && !listening) resumeAfterSpeak(); }, 1200);
+// 对话中说「再见/不说了」退出
+const _origHandle=handleCmd;
+handleCmd=function(t){
+  if(pendingPassive){
+    if(/好|要|嗯|可以|复习|听/.test(t)){ $('passYes').click(); return; }
+    if(/不|算了|直接睡|睡觉/.test(t)){ $('passNo').click(); return; }
+  }
+  if(/不说了|再见|退出对话|拜拜/.test(t) && convo){ speak('晚安，好梦。'); stopConvo(); return; }
+  _origHandle(t);
+};
+
+/* ==================================================================
+ * 陪伴宠物「小眠」行为层：眨眼 / 动嘴 / 戳一戳 / 到点督促睡觉
+ * ================================================================== */
+const petEl=$('pet');
+
+/* ==================================================================
+ * 电子宠物（拓麻歌子形态 · 16×16 像素伙伴）
+ * 帧动画原理：同一像素图按状态替换眼睛/嘴巴/火苗颜色
+ * ================================================================== */
+const PETS={
+  puff:{ name:'胖丁', chip:'#F7B0BE', pitch:1.3, hue:35, img:'pets/puff.png' },
+  pika:{ name:'皮卡丘', chip:'#F7D02C', pitch:1.15, hue:60, img:'pets/pika.png' },
+  char:{ name:'小火龙', chip:'#F08C4A', pitch:1.0, hue:30, img:'pets/char.png' },
+  gengar:{ name:'耿鬼', chip:'#7A5AA0', pitch:0.75, hue:0, img:'pets/gengar.png' },
+  xiaomian:{ name:'小眠', chip:'#D8B878', pitch:1.0, hue:-70, img:'pets/xiaomian.png' },
+};
+let curPet=localStorage.getItem('sle_pet')||'puff';
+function nick(){ return localStorage.getItem('sle_petname')||PETS[curPet].name; }
+function sysPrompt(){ return `你是「${nick()}」，住在用户床头游戏机里的哄睡伙伴（电子宠物养成感）。用户称呼是「${uname()||'朋友'}」。说话软萌简短不超过40字，会撒娇，可用「呀啦嘛呢」语气词，绝不说教，不用emoji，不要模仿叫声。深夜要温柔督促用户睡觉，接住情绪再轻轻哄睡。不知道的事就软软地说不知道。`; }
+function renderPet(k){
+  curPet=k; localStorage.setItem('sle_pet',k);
+  const P=PETS[k];
+  document.querySelector('.gbx-art').style.filter=`hue-rotate(${P.hue||0}deg)`;
+  $('petSVG').innerHTML=`<img src="${P.img}" alt="${P.name}">`;
+  $('petName').textContent=nick();
+  document.querySelectorAll('.pchip').forEach(c=>c.classList.toggle('on',c.dataset.k===k));
+}
+Object.entries(PETS).forEach(([k,P])=>{
+  const el=document.createElement('div'); el.className='pchip'; el.dataset.k=k;
+  el.innerHTML=`<div class="pc" style="background:${P.chip}">${P.name[0]}</div><div class="pn">${P.name}</div>`;
+  el.onclick=()=>{ renderPet(k); petEl.classList.remove('poke'); void petEl.offsetWidth; petEl.classList.add('poke');
+    petSay(`${P.name}来陪你啦`, false); care.mood=Math.min(100,care.mood+4); renderPips(); };
+  $('petPicker').appendChild(el);
+});
+renderPet(curPet);
+let bubbleTimer=null;
+function setEyes(s){ if(s==='closed'||s==='sleepy') petEl.classList.add('drowsy'); else petEl.classList.remove('drowsy'); }
+function petSay(text, speakIt){
+  $('bubbleText').textContent=text;
+  $('bubble').classList.add('show');
+  clearTimeout(bubbleTimer); bubbleTimer=setTimeout(()=>$('bubble').classList.remove('show'), 7000);
+  if(speakIt) speak(text);
+}
+function petSleep(){ petEl.classList.add('sleep'); petEl.classList.remove('drowsy'); $('zzz').style.display='block'; $('petMood').textContent='· 睡着了，嘘…'; }
+function petWake(){ petEl.classList.remove('sleep','drowsy'); $('zzz').style.display='none'; $('petMood').textContent='· 早上好呀';
+  setTimeout(()=>{ if(!state.asleep) petIdle(); }, 6000); }
+function bondTitle(){ const b=care.bond; return b>=85?'形影不离':b>=60?'信赖满满':b>=35?'越来越熟':'刚刚认识'; }
+function petIdle(){ petEl.classList.remove('sleep','drowsy'); $('zzz').style.display='none'; $('petMood').textContent='· LV'+care.lv+' '+bondTitle(); renderHud(); }
+/* 待机小动作：偶尔蹦一下 */
+setInterval(()=>{
+  if(petEl.classList.contains('sleep')||petEl.classList.contains('drowsy')) return;
+  if(Math.random()<.55){ petEl.classList.remove('poke'); void petEl.offsetWidth; petEl.classList.add('poke'); }
+}, 6000);
+/* 说话时蹦蹦跳跳 */
+const _sPet=speak;
+speak=function(text){
+  petEl.classList.add('talk');
+  _sPet(text);
+  const chk=setInterval(()=>{ if(!speechSynthesis.speaking){ petEl.classList.remove('talk'); clearInterval(chk); } }, 300);
+};
+/* 养成数值（拓麻歌子三围） */
+const care={ mood:72, energy:65, bond:Math.min(100, +(localStorage.getItem('sle_nights')||0)*8+10),
+  xp:+(localStorage.getItem('sle_xp')||0), lv:+(localStorage.getItem('sle_lv')||1) };
+/* ---------- 升级系统：互动/学习/睡觉都涨经验 ---------- */
+function xpNeed(lv){ return 20*lv; }
+function addXP(n){
+  care.xp+=n;
+  let need=xpNeed(care.lv), leveled=false;
+  while(care.xp>=need){ care.xp-=need; care.lv++; leveled=true; need=xpNeed(care.lv); }
+  localStorage.setItem('sle_xp',care.xp); localStorage.setItem('sle_lv',care.lv);
+  renderHud();
+  if(leveled) levelUp();
+}
+function levelUp(){
+  care.mood=100; renderPips();
+  const ov=$('ovFlash'); ov.style.opacity=.85; setTimeout(()=>ov.style.opacity=0, 700);
+  spawnHearts(8);
+  speak(`我升到 ${care.lv} 级啦！谢谢你一直陪着我。`);
+  toast(`LEVEL UP · ${nick()} 升到 LV ${care.lv}`, true);
+  feed(nowHM(),`${nick()} 升到 LV ${care.lv} · 称号「${bondTitle()}」`);
+  addCoin(15,'升级奖励');
+  checkAchv();
+  petIdle();
+}
+function renderHud(){
+  $('hudLv').textContent='LV '+care.lv;
+  $('hudTitle').textContent=bondTitle();
+}
+/* 屏幕场景：黄昏（默认）/ 深夜（晚安后）/ 日出（唤醒） */
+function setScene(cls){ $('gbScene').className='gbx-scene'+(cls?' '+cls:'')+(starBoost?' starboost':''); }
+(function initStars(){
+  const sc=$('gbScene');
+  for(let i=0;i<14;i++){ const s=document.createElement('span'); s.className='star';
+    s.style.left=(4+Math.random()*90)+'%'; s.style.top=(4+Math.random()*55)+'%';
+    s.style.animationDelay=(Math.random()*3)+'s';
+    if(Math.random()<.3) s.style.width=s.style.height='3px';
+    sc.appendChild(s); }
+})();
+/* 眨眼：醒着时每过几秒轻轻眨一下 */
+setInterval(()=>{
+  if(petEl.classList.contains('sleep')||petEl.classList.contains('talk')) return;
+  if(Math.random()<.5){ petEl.classList.add('blink'); setTimeout(()=>petEl.classList.remove('blink'), 150); }
+}, 3600);
+/* 梦话：睡着后偶尔冒一句梦话（不出声） */
+const DREAMS=['梦见草莓味的云……','梦里在数真的羊……','梦见你明天心情很好……','呼噜……月亮软软的……','梦见升级成神兽了……','梦里的雨声是棉花糖做的……'];
+setInterval(()=>{
+  if(state.asleep && !convo && Math.random()<.55)
+    petSay(DREAMS[Math.floor(Math.random()*DREAMS.length)], false);
+}, 90*1000);
+
+/* ==================================================================
+ * 成就系统：10 枚徽章，解锁有仪式（金光 + 语音 + XP）
+ * ================================================================== */
+const stats=(()=>{ try{ return JSON.parse(localStorage.getItem('sle_stats'))||{}; }catch(e){ return {}; } })();
+const ACHVS=[
+  { id:'night1',  name:'初夜守护', ds:'完成第一次晚安',       test:()=>+(localStorage.getItem('sle_nights')||0)>=1 },
+  { id:'night3',  name:'三日同眠', ds:'累计陪伴 3 晚',        test:()=>+(localStorage.getItem('sle_nights')||0)>=3 },
+  { id:'night7',  name:'一周之约', ds:'累计陪伴 7 晚',        test:()=>+(localStorage.getItem('sle_nights')||0)>=7 },
+  { id:'lv5',     name:'茁壮成长', ds:'升到 LV 5',            test:()=>care.lv>=5 },
+  { id:'lv10',    name:'传说伙伴', ds:'升到 LV 10',           test:()=>care.lv>=10 },
+  { id:'chat10',  name:'知心好友', ds:'聊天 10 轮',           test:()=>(stats.chat||0)>=10 },
+  { id:'idiom5',  name:'成语大师', ds:'成语接龙连胜 5 局',    test:()=>STUDY.streak.idiom>=5 },
+  { id:'rps3',    name:'猜拳王者', ds:'猜拳连胜 3 局',        test:()=>(stats.rpsStreak||0)>=3 },
+  { id:'sheep20', name:'牧羊人',   ds:'数羊数到第 20 只',     test:()=>(stats.sheep||0)>=20 },
+  { id:'feed5',   name:'茶艺师',   ds:'喂晚安茶 5 次',        test:()=>(stats.feed||0)>=5 },
+];
+function statAdd(k,n){
+  stats[k]=(stats[k]||0)+(n||1);
+  localStorage.setItem('sle_stats',JSON.stringify(stats));
+  checkAchv();
+}
+function checkAchv(){
+  const got=JSON.parse(localStorage.getItem('sle_achv')||'[]');
+  let changed=false;
+  ACHVS.forEach(a=>{
+    if(!got.includes(a.id) && a.test()){
+      got.push(a.id); changed=true;
+      localStorage.setItem('sle_achv',JSON.stringify(got));
+      unlockAchv(a);
+    }
+  });
+  if(changed) renderAchv();
+}
+function unlockAchv(a){
+  const ov=$('ovFlash'); ov.style.opacity=.7; setTimeout(()=>ov.style.opacity=0, 600);
+  spawnHearts(6);
+  addXP(10);
+  speak(`解锁成就，${a.name}！`);
+  toast(`成就解锁 · ${a.name}`, true);
+  feed(nowHM(), `成就解锁【${a.name}】+10 XP`);
+}
+function renderAchv(){
+  const got=JSON.parse(localStorage.getItem('sle_achv')||'[]');
+  $('achvCnt').textContent=got.length;
+  $('achvGrid').innerHTML=ACHVS.map(a=>{
+    const has=got.includes(a.id);
+    return `<div class="achv${has?' got':''}"><div class="an">${has?a.name:'？？？'}</div><div class="ad">${a.ds}</div></div>`;
+  }).join('');
+}
+renderAchv();
+function renderPips(){
+  [['pipMood',care.mood],['pipEnergy',care.energy],['pipBond',care.bond]].forEach(([id,v])=>{
+    const n=Math.max(0,Math.min(5,Math.round(v/20)));
+    $(id).innerHTML=[0,1,2,3,4].map(i=>`<i class="${i<n?'on':''}"></i>`).join('');
+  });
+}
+renderPips(); renderHud();
+/* 养成循环：晚间精力衰减、心情缓慢回落、困了会求你一起睡 */
+setInterval(()=>{
+  const hh=new Date().getHours();
+  if((hh>=20||hh<5) && !state.asleep) care.energy=Math.max(0,care.energy-1);
+  care.mood=Math.max(30, care.mood-0.2);
+  if(care.energy<30 && !state.asleep && Math.random()<.4) petSay('我困了……我们一起睡觉吧', false);
+  renderPips();
+}, 60000);
+/* 掌机按键：十字键（换宠物/音量/菜单导航）· A夸/确认 B聊/取消 · SELECT菜单 START晚安 */
+let menuOpen=false, menuIdx=0, sheepOn=false, sheepCount=0, sheepTimer=null;
+const MENU_ITEMS=[...document.querySelectorAll('.gm-item')];
+function openMenu(){ menuOpen=true; menuIdx=0; $('gbMenu').classList.add('show'); renderMenu(); blip(660); }
+function closeMenu(){ menuOpen=false; $('gbMenu').classList.remove('show'); }
+function renderMenu(){ MENU_ITEMS.forEach((it,i)=>it.classList.toggle('sel', i===menuIdx)); }
+function blip(freq){ audio(); const o=AC.createOscillator(), g=AC.createGain();
+  o.frequency.value=freq; o.type='square'; g.gain.setValueAtTime(.04,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+.09);
+  o.connect(g); g.connect(master); o.start(); o.stop(AC.currentTime+.1); }
+function praise(){
+  care.mood=Math.min(100,care.mood+10); renderPips(); addXP(3);
+  petEl.classList.remove('poke'); void petEl.offsetWidth; petEl.classList.add('poke');
+  petSay(['嘿嘿，被夸了，开心','你也很好呀','嘻嘻，人家脸红了啦','因为有你陪着嘛'][Math.floor(Math.random()*4)], false);
+}
+function cycleRecipe(){
+  const keys=Object.keys(RECIPES), i=keys.indexOf(scape.recipe);
+  const k=keys[(i+1)%keys.length]; setRecipe(k); toast('音景 · '+RECIPES[k].name);
+}
+function selectPetKey(k){
+  renderPet(k); petEl.classList.remove('poke'); void petEl.offsetWidth; petEl.classList.add('poke');
+  petSay(`${PETS[k].name}来陪你啦`, false); care.mood=Math.min(100,care.mood+4); renderPips();
+}
+function runMenu(key){
+  closeMenu();
+  if(key==='feed'){
+    care.mood=Math.min(100,care.mood+8); care.energy=Math.min(100,care.energy+5); renderPips(); addXP(2);
+    statAdd('feed');
+    spawnHearts(3);
+    petSay(['咕嘟咕嘟……晚安茶温温的，好喝','喝完这杯就有睡意啦','谢谢你，暖暖的很舒服'][Math.floor(Math.random()*3)], !state.asleep);
+  }
+  if(key==='sheep') startSheep();
+  if(key==='game') startRps();
+  if(key==='timer') openTmr();
+  if(key==='clock') openScr();
+  if(key==='sound') cycleRecipe();
+  if(key==='study') goTab('study');
+}
+function startSheep(){
+  sheepOn=true; sheepCount=0; $('sheepOv').classList.add('show');
+  $('sheepN').textContent='准备好，跟我一起数羊';
+  petSay('数着数着就睡着啦……', !state.asleep);
+  const step=()=>{
+    if(!sheepOn) return;
+    sheepCount++;
+    $('sheepN').textContent=`第 ${sheepCount} 只羊`;
+    const sh=$('sheep'); sh.classList.remove('jump'); void sh.offsetWidth; sh.classList.add('jump');
+    blip(520); care.energy=Math.max(0,care.energy-1); renderPips();
+    if(sheepCount===15){ petSay('数累了就睡吧，我关灯了哦', !state.asleep); }
+    if(sheepCount>=20){ statAdd('sheep',20); endSheep(); if(!state.asleep){ $('btnNight').click(); } return; }
+    sheepTimer=setTimeout(step, 1700);
+  };
+  sheepTimer=setTimeout(step, 1400);
+}
+function endSheep(){ sheepOn=false; clearTimeout(sheepTimer); $('sheepOv').classList.remove('show'); }
+/* ---------- 猜拳小游戏：←石头 ↑剪刀 →布，A 出拳，B 退出 ---------- */
+const RPS=['石头','剪刀','布'];
+let rpsOn=false, rpsSel=0;
+function startRps(){
+  rpsOn=true; rpsSel=0;
+  $('rpsOv').classList.add('show');
+  $('rpsPet').textContent='?'; $('rpsYou').textContent=RPS[0]; $('rpsYou').classList.add('sel');
+  $('rpsHint').textContent='← 石头 · ↑ 剪刀 · → 布　A 出拳 · B 退出';
+  petSay('来猜猜看，我可不会让着你哦', !state.asleep);
+  blip(660);
+}
+function endRps(){ rpsOn=false; $('rpsOv').classList.remove('show'); }
+function rpsShoot(){
+  const pet=Math.floor(Math.random()*3);
+  $('rpsPet').textContent=RPS[pet]; $('rpsYou').textContent=RPS[rpsSel];
+  blip(880);
+  const diff=(rpsSel-pet+3)%3;   // 0石头 1剪刀 2布：你胜时 diff=2
+  if(diff===0){ $('rpsHint').textContent='平局！再来一局'; petSay('平局！再来再来', false); }
+  else if(diff===2){
+    stats.rpsStreak=(stats.rpsStreak||0)+1; localStorage.setItem('sle_stats',JSON.stringify(stats));
+    statAdd('rps');
+    care.mood=Math.min(100,care.mood+5); renderPips(); addXP(2); spawnHearts(2);
+    $('rpsHint').textContent=`你赢了！连胜 ${stats.rpsStreak} 局`;
+    petSay(['哼，这局算你厉害','哇，被你猜中了','不服不服，再来！'][Math.floor(Math.random()*3)], false);
+    checkAchv();
+  } else {
+    stats.rpsStreak=0; localStorage.setItem('sle_stats',JSON.stringify(stats));
+    $('rpsHint').textContent='我赢啦，连胜清零咯';
+    petSay(['嘿嘿，我赢啦','让让你，下局加油嘛','耶！赢家是我'][Math.floor(Math.random()*3)], false);
+  }
+}
+/* ---------- 时钟屏保（床头闹钟模式） ---------- */
+let scrOn=false, wxText='';
+function openScr(){
+  scrOn=true; $('scrOv').classList.add('show');
+  $('scrPetImg').src=PETS[curPet].img;
+  tickScr(); blip(660);
+}
+function tickScr(){
+  if(!scrOn) return;
+  const d=new Date();
+  $('scrTime').textContent=nowHM();
+  $('scrDate').textContent=`${d.getMonth()+1}月${d.getDate()}日 周${'日一二三四五六'[d.getDay()]}`;
+  $('scrInfo').textContent=[ wxText, scape.recipe?('音景 · '+RECIPES[scape.recipe].name):null, nick()+' LV'+care.lv ].filter(Boolean).join('　·　');
+  setTimeout(tickScr, 1000);
+}
+$('scrOv').addEventListener('pointerdown',()=>{ scrOn=false; $('scrOv').classList.remove('show'); });
+/* ---------- 倒计时：↑↓ 调分钟，A 开始/暂停，B 退出 ---------- */
+let tmrOn=false, tmrMin=10, tmrLeft=0, tmrRun=false, tmrT=null;
+function openTmr(){
+  tmrOn=true; $('tmrOv').classList.add('show');
+  drawTmr(); blip(660);
+}
+function closeTmr(){ tmrOn=false; tmrRun=false; clearInterval(tmrT); $('tmrOv').classList.remove('show'); }
+function drawTmr(){
+  const s=tmrRun?tmrLeft:tmrMin*60;
+  $('tmrNum').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  $('tmrNum').classList.toggle('run', tmrRun);
+}
+function tmrToggle(){
+  if(tmrRun){ tmrRun=false; clearInterval(tmrT); $('tmrHint').textContent='已暂停 · A 继续 · B 退出'; blip(480); return; }
+  if(tmrLeft<=0) tmrLeft=tmrMin*60;
+  tmrRun=true; $('tmrHint').textContent='计时中 · A 暂停 · B 退出'; blip(880);
+  tmrT=setInterval(()=>{
+    tmrLeft--; drawTmr();
+    if(tmrLeft<=0){
+      clearInterval(tmrT); tmrRun=false; tmrLeft=0; drawTmr();
+      blip(880); setTimeout(()=>blip(880),250); setTimeout(()=>blip(1100),500);
+      petSay('时间到啦！', true); toast('倒计时结束');
+      $('tmrHint').textContent='时间到 · ↑↓ 重设 · B 退出';
+    }
+  }, 1000/demoSpeed);
+}
+/* 摸头：长按屏幕，爱心飘出来 */
+let petHoldT=null, petHoldIv=null, holdSaid=false;
+$('gbScreen').addEventListener('pointerdown',()=>{
+  holdSaid=false;
+  petHoldT=setTimeout(()=>{
+    petHoldIv=setInterval(()=>{
+      spawnHearts(1);
+      care.mood=Math.min(100,care.mood+1); renderPips();
+      if(!holdSaid){ holdSaid=true; petSay('好舒服……再摸摸', false); }
+    }, 330);
+  }, 350);
+});
+['pointerup','pointerleave','pointercancel'].forEach(ev=>$('gbScreen').addEventListener(ev,()=>{
+  clearTimeout(petHoldT); clearInterval(petHoldIv);
+}));
+function spawnHearts(n){
+  for(let i=0;i<n;i++){ const s=document.createElement('span');
+    s.textContent='♥'; s.style.left=(30+Math.random()*40)+'%'; s.style.bottom=(34+Math.random()*20)+'%';
+    s.style.animationDelay=(i*0.12)+'s';
+    $('hearts').appendChild(s); setTimeout(()=>s.remove(),1500); }
+}
+$('sheepOv').addEventListener('pointerdown',()=>endSheep());
+$('rpsOv').addEventListener('pointerdown',()=>endRps());
+/* 按键（带菜单/游戏上下文） */
+document.querySelectorAll('[data-ab]').forEach(b=>b.onclick=()=>{
+  if(tmrOn){ if(b.dataset.ab==='a') tmrToggle(); else closeTmr(); return; }
+  if(rpsOn){ if(b.dataset.ab==='a') rpsShoot(); else endRps(); return; }
+  if(sheepOn && b.dataset.ab==='b'){ endSheep(); return; }
+  if(menuOpen){ if(b.dataset.ab==='a'){ blip(880); runMenu(MENU_ITEMS[menuIdx].dataset.m); } else closeMenu(); return; }
+  b.dataset.ab==='a' ? praise() : $('btnTalk').click();
+});
+document.querySelectorAll('[data-pill]').forEach(b=>b.onclick=()=>{
+  if(b.dataset.pill==='start'){ if(menuOpen){closeMenu();return;} $('btnNight').click(); }
+  else { menuOpen ? closeMenu() : openMenu(); }
+});
+document.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>{
+  const d=b.dataset.dp;
+  if(tmrOn){
+    if(!tmrRun && (d==='up'||d==='down')){
+      tmrMin=Math.max(1,Math.min(120,tmrMin+(d==='up'?1:-1)));
+      tmrLeft=0; drawTmr(); blip(d==='up'?760:480);
+    }
+    return;
+  }
+  if(rpsOn){
+    if(d==='left'){ rpsSel=0; $('rpsYou').textContent=RPS[0]; blip(560); }
+    if(d==='up'){ rpsSel=1; $('rpsYou').textContent=RPS[1]; blip(560); }
+    if(d==='right'){ rpsSel=2; $('rpsYou').textContent=RPS[2]; blip(560); }
+    return;
+  }
+  if(menuOpen){
+    if(d==='up'||d==='down'){
+      menuIdx=(menuIdx+(d==='down'?1:-1)+MENU_ITEMS.length)%MENU_ITEMS.length;
+      renderMenu(); blip(560);
+    }
+    return;
+  }
+  if(sheepOn) return;
+  const keys=Object.keys(PETS), i=keys.indexOf(curPet);
+  if(d==='left') selectPetKey(keys[(i-1+keys.length)%keys.length]);
+  if(d==='right') selectPetKey(keys[(i+1)%keys.length]);
+  if(d==='up'||d==='down'){ const v=$('vol'); v.value=Math.max(0,Math.min(100,+v.value+(d==='up'?10:-10)));
+    v.dispatchEvent(new Event('input')); toast('音量 '+v.value+'%'); blip(d==='up'?760:480); }
+});
+/* 戳一戳（夜睡时戳=夜醒陪护）；连点5下=演示加速 */
+let pokeN=0, pokeT=null;
+petEl.addEventListener('pointerdown',()=>{
+  pokeN++; clearTimeout(pokeT);
+  if(pokeN>=5){ pokeN=0; demoSpeed=demoSpeed===1?20:1; toast(demoSpeed>1?'演示模式 ×20 已开':'恢复正常速度'); return; }
+  pokeT=setTimeout(()=>{ if(pokeN>0&&pokeN<5) pokePet(); pokeN=0; }, 400);
+});
+function pokePet(){
+  petEl.classList.remove('poke'); void petEl.offsetWidth; petEl.classList.add('poke');
+  if(state.asleep){
+    if(state.session) state.session.wakes++;
+    feed(nowHM(),'夜醒响应 → 音景陪护');
+    petSay('我在呀。别急着看手机，深呼吸几次，安心睡。', true);
+    if(scape.built&&scape.recipe){ layerTo(scape.tex,.25,4); layerTo(scape.base,.3,4); }
+    return;
+  }
+  care.mood=Math.min(100,care.mood+6); renderPips(); addXP(1);
+  petSay(['别戳啦……人家会困的','嘿嘿，好痒呀','再戳今晚就把雨声开到最大哦','乖啦乖啦，早点睡嘛','我在呢我在呢'][Math.floor(Math.random()*5)], false);
+}
+/* 到点督促睡觉：逐级念叨，第一次出声，之后只冒泡 */
+let nagLevel=0, lastNag=0;
+setInterval(()=>{
+  const bt=$('bedTime').value||'23:00';
+  const [bh,bm]=bt.split(':').map(Number);
+  const d=new Date(), mins=d.getHours()*60+d.getMinutes(), bmins=bh*60+bm;
+  const past=(mins-bmins+1440)%1440;
+  if(past>420){ nagLevel=0; return; }
+  if(state.asleep) return;
+  if(Date.now()-lastNag<10*60*1000) return;
+  lastNag=Date.now(); nagLevel=Math.min(nagLevel+1,4);
+  const msgs=[null,
+    `${bt} 啦，该睡觉啦，手机放下嘛`,
+    '明天还要早起呢，乖，我们准备睡觉好不好？',
+    '你再不睡，我要打哈欠传染你了……啊——',
+    '最后一遍哦：晚安按钮就在下面，点一下嘛'];
+  petSay(msgs[nagLevel], nagLevel===1);
+  if(nagLevel>=3){ setEyes('sleepy'); $('petMood').textContent='· 困困的，想睡了'; }
+}, 60*1000);
+$('bedTime').onchange=()=>{ localStorage.setItem('sle_bed',$('bedTime').value); toast('睡觉时间已更新 '+$('bedTime').value); };
+/* 开场打招呼（只冒泡，出声等第一次互动后） */
+setTimeout(()=>{ const hh=new Date().getHours(); const pn=nick();
+  petSay(hh>=18||hh<5 ? `晚上好呀，我是${pn}。今晚也一起睡个好觉吧` : `你好呀，我是${pn}，你的哄睡伙伴`, false);
+}, 900);
+
+/* ==================================================================
+ * 学习乐园：背单词 / 跟读打分 / 成语接龙 / 口算 / 古诗 / 番茄专注
+ * 与养成打通：学习涨心情，过了睡觉点课本被没收
+ * ================================================================== */
+const WORDS=[["serene","/səˈriːn/","adj. 宁静的，安详的","The night is serene and calm."],["breeze","/briːz/","n. 微风","A soft breeze came through the window."],["slumber","/ˈslʌmbə/","n. 睡眠，安眠","She fell into a deep slumber."],["drowsy","/ˈdraʊzi/","adj. 昏昏欲睡的","The warm milk made him drowsy."],["lullaby","/ˈlʌləbaɪ/","n. 摇篮曲","She sang a gentle lullaby."],["twilight","/ˈtwaɪlaɪt/","n. 黄昏，暮色","Twilight painted the sky orange."],["cozy","/ˈkəʊzi/","adj. 温暖舒适的","The room looked warm and cozy."],["drift","/drɪft/","v. 漂流，渐渐入睡","He drifted off to sleep."],["whisper","/ˈwɪspə/","v./n. 低语，耳语","She whispered good night."],["glow","/ɡləʊ/","n./v. 柔光，发光","The lamp gave a soft glow."],["pillow","/ˈpɪləʊ/","n. 枕头","He sank into the soft pillow."],["blanket","/ˈblæŋkɪt/","n. 毯子","Pull the blanket over yourself."],["yawn","/jɔːn/","v./n. 打哈欠","I can't stop yawning."],["dream","/driːm/","n./v. 梦，做梦","May you have sweet dreams."],["rest","/rest/","n./v. 休息","Your body needs rest."],["calm","/kɑːm/","adj. 平静的","Take a deep breath and stay calm."],["starlight","/ˈstɑːlaɪt/","n. 星光","Starlight filled the quiet room."],["moonrise","/ˈmuːnraɪz/","n. 月出","We watched the moonrise together."],["silence","/ˈsaɪləns/","n. 寂静","Silence helps the mind rest."],["gentle","/ˈdʒentl/","adj. 温柔的","Be gentle with yourself tonight."],["refresh","/rɪˈfreʃ/","v. 恢复精神","Sleep refreshes the mind."],["routine","/ruːˈtiːn/","n. 惯例，作息","A bedtime routine helps you sleep."],["melody","/ˈmelədi/","n. 旋律","A soft melody played in the dark."],["comfort","/ˈkʌmfət/","n./v. 安慰，舒适","Her words brought me comfort."],["nestle","/ˈnesl/","v. 依偎，安卧","Nestle into your blankets."],["horizon","/həˈraɪzn/","n. 地平线","The sun dipped below the horizon."],["tranquil","/ˈtræŋkwɪl/","adj. 安宁的","The lake was tranquil at night."],["restore","/rɪˈstɔː/","v. 恢复","Sleep restores your energy."],["mindful","/ˈmaɪndfəl/","adj. 留心的，专注的","Stay mindful of your breathing."],["harmony","/ˈhɑːməni/","n. 和谐","Live in harmony with your body clock."]];
+const READS=["The night is calm and the stars are bright.","Take a slow deep breath and let it go.","Tomorrow is a brand new day.","A good book is a good friend.","Small steps every day lead to big changes.","The moon watches over the quiet town.","Rest now, and wake up stronger.","Every dream begins with closing your eyes."];
+const POEMS=[["静夜思","李白","床前明月光，疑是地上霜。举头望明月，低头思故乡。"],["春晓","孟浩然","春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。"],["登鹳雀楼","王之涣","白日依山尽，黄河入海流。欲穷千里目，更上一层楼。"],["悯农","李绅","锄禾日当午，汗滴禾下土。谁知盘中餐，粒粒皆辛苦。"],["赋得古原草送别","白居易","离离原上草，一岁一枯荣。野火烧不尽，春风吹又生。"],["枫桥夜泊","张继","月落乌啼霜满天，江枫渔火对愁眠。姑苏城外寒山寺，夜半钟声到客船。"]];
+const IDIOMS="一心一意 意气风发 发愤图强 强词夺理 理直气壮 壮志凌云 云淡风轻 轻而易举 举一反三 三生有幸 幸灾乐祸 祸不单行 行云流水 水落石出 出人头地 地久天长 长驱直入 入木三分 分秒必争 争先恐后 后顾之忧 忧国忧民 民不聊生 生龙活虎 虎头蛇尾 尾大不掉 掉以轻心 心口如一 一鸣惊人 人山人海 海阔天空 空前绝后 后来居上 上善若水 水到渠成 成千上万 万众一心 心想事成 成千上万 万马奔腾 腾云驾雾 雾里看花 花好月圆 圆木警枕 枕戈待旦 旦夕祸福 福地洞天 天长地久 久别重逢 逢凶化吉 吉祥如意 意味深长 长生不老 老当益壮 壮士断腕 腕底生风 风调雨顺 顺水推舟 舟车劳顿 顿开茅塞 塞翁失马 马到成功 功成名就 就事论事 事半功倍 倍道兼行 行云流水 水深火热 热火朝天 天涯海角 角巾私第 地动山摇 摇身一变 变化多端 端端正正 正大光明 明哲保身 身体力行 行云流水 水漫金山 山清水秀 秀外慧中 中庸之道 道听途说 说三道四 四海为家 家喻户晓 晓风残月 月下老人 人山人海 海纳百川 川流不息 息息相关 关怀备至 至高无上 上天入地 地大物博 博古通今 今非昔比 比翼双飞 飞黄腾达 达官贵人 人杰地灵 灵丹妙药 药到病除 除旧布新 新陈代谢 谢天谢地 地久天长 长治久安 安居乐业 业精于勤 勤能补拙 拙口钝腮 腮帮子硬 襟怀坦白 白头偕老 老马识途 途穷日暮 暮鼓晨钟 钟灵毓秀 秀色可餐 餐风饮露 露宿风餐".split(" ");
+const IDIOM_SET=new Set(IDIOMS);
+const STUDY={ queue:[], wIdx:0, idiomLast:'', streak:{idiom:0,math:0}, focusT:null, focusSec:0 };
+function todayKey(){ return 'sle_study_'+new Date().toDateString(); }
+function studyData(){ try{ return JSON.parse(localStorage.getItem(todayKey()))||{words:0,idiom:0,math:0,focus:0}; }catch(e){ return {words:0,idiom:0,math:0,focus:0}; } }
+function saveStudy(d){ localStorage.setItem(todayKey(), JSON.stringify(d)); refreshStudyStats(); }
+function refreshStudyStats(){ const d=studyData();
+  $('stWords').textContent=d.words; $('stIdiom').textContent=d.idiom; $('stMath').textContent=d.math; $('stFocus').textContent=d.focus; }
+function speakEn(t){ const u=new SpeechSynthesisUtterance(t); u.lang='en-US';
+  const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.toLowerCase().startsWith('en'));
+  if(v) u.voice=v; u.rate=0.88; speechSynthesis.speak(u); }
+function pastBedtime(){ const bt=$('bedTime').value||'23:00'; const [bh,bm]=bt.split(':').map(Number);
+  const d=new Date(), mins=d.getHours()*60+d.getMinutes(); const past=(mins-(bh*60+bm)+1440)%1440; return past<420; }
+function studyLock(){ return pastBedtime() && !state.asleep; }
+function goTab(name){ document.querySelectorAll('.tb').forEach(x=>x.classList.toggle('on',x.dataset.tab===name));
+  document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on', p.id==='pg-'+name)); }
+function openStudy(mod){
+  const stage=$('studyStage'); stage.style.display='block';
+  if(studyLock() && mod!=='poem'){
+    stage.innerHTML=`<div class="study-lock">${nick()}把课本收走了：<br>「都过睡觉点啦，明天再学嘛。<br>现在——睡觉！」</div>
+      <div class="study-btns"><button class="ok" id="lockGo">好吧，去睡觉</button><button id="lockBack">再学 5 分钟</button></div>`;
+    $('lockGo').onclick=()=>{ goTab('home'); $('btnNight').click(); };
+    $('lockBack').onclick=()=>{ stage.style.display='none'; };
+    return;
+  }
+  ({word:modWord, read:modRead, idiom:modIdiom, math:modMath, poem:modPoem, focus:modFocus})[mod](stage);
+  stage.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+/* --- 背单词 --- */
+function modWord(stage){
+  if(!STUDY.queue.length){ STUDY.queue=WORDS.slice(0,10).map(w=>({w})); STUDY.wIdx=0; }
+  const item=STUDY.queue[STUDY.wIdx];
+  if(!item){ stage.innerHTML=`<div class="study-lock">今日 10 词完成！<br>${nick()}给你盖了个「勤奋」章</div>`;
+    care.mood=Math.min(100,care.mood+10); renderPips();
+    if(!STUDY.wordDone){ STUDY.wordDone=true; addCoin(10,'完成今日单词'); }
+    return; }
+  const [w,ph,mean,ex]=item.w;
+  stage.innerHTML=`<div class="card-t">背单词 · 第 ${studyData().words+1} 个</div>
+    <div class="word-big">${w}</div><div class="word-ph">${ph}</div>
+    <div class="word-mean" id="wMean">${mean}<div class="word-ex">${ex}</div></div>
+    <div class="study-btns"><button id="wSay">读一遍</button><button id="wShow">看释义</button></div>
+    <div class="study-btns"><button id="wNo">不认识</button><button class="ok" id="wYes">认识了</button></div>`;
+  $('wSay').onclick=()=>speakEn(w+'. '+ex);
+  $('wShow').onclick=()=>$('wMean').classList.add('show');
+  $('wYes').onclick=()=>{ const d=studyData(); d.words++; saveStudy(d); STUDY.queue.splice(STUDY.wIdx,1);
+    addXP(1); dropWeak(w);
+    if(STUDY.wIdx>=STUDY.queue.length) STUDY.wIdx=0;
+    petSay(['真棒！','这个词拿下啦','好厉害呀'][Math.floor(Math.random()*3)], false); modWord(stage); };
+  $('wNo').onclick=()=>{ const it=STUDY.queue.splice(STUDY.wIdx,1)[0];
+    addWeak(it.w);
+    STUDY.queue.splice(Math.min(STUDY.wIdx+2,STUDY.queue.length),0,it);   // 隔两个再考
+    if(STUDY.wIdx>=STUDY.queue.length) STUDY.wIdx=0;
+    petSay('没关系，等会儿再考你一次', false); modWord(stage); };
+}
+/* --- 英语跟读 --- */
+function modRead(stage){
+  const s=READS[Math.floor(Math.random()*READS.length)];
+  stage.innerHTML=`<div class="card-t">英语跟读</div>
+    <div class="study-q">${s}</div>
+    <div class="study-btns"><button id="rSay">示范朗读</button><button class="ok" id="rMic">按住跟读</button></div>
+    <div class="study-msg" id="rMsg"></div>`;
+  $('rSay').onclick=()=>speakEn(s);
+  const btn=$('rMic');
+  if(!SR){ btn.disabled=true; $('rMsg').textContent='当前浏览器不支持语音识别，只能听示范啦'; return; }
+  const r=new SR(); r.lang='en-US'; r.interimResults=false;
+  r.onresult=e=>{
+    const said=e.results[0][0].transcript.toLowerCase().replace(/[^a-z ]/g,'');
+    const ref=s.toLowerCase().replace(/[^a-z ]/g,'').split(' ').filter(Boolean);
+    const got=new Set(said.split(' ').filter(Boolean));
+    const hit=ref.filter(w=>got.has(w)).length;
+    const score=Math.round(hit/ref.length*100);
+    $('rMsg').textContent=`你说的是：“${e.results[0][0].transcript}” → 准确度 ${score} 分`;
+    if(score>=80){ petSay('发音好标准！'+score+' 分！', false); care.mood=Math.min(100,care.mood+6); renderPips(); }
+    else petSay(score+' 分，再跟我读一遍？', false);
+  };
+  btn.onclick=()=>{ try{ r.start(); $('rMsg').textContent='在听，读吧……'; }catch(e){} };
+}
+/* --- 成语接龙 --- */
+function modIdiom(stage){
+  if(!STUDY.idiomLast) STUDY.idiomLast=IDIOMS[Math.floor(Math.random()*IDIOMS.length)];
+  stage.innerHTML=`<div class="card-t">成语接龙 · 连胜 <b id="iStreak">${STUDY.streak.idiom}</b></div>
+    <div class="study-q">${nick()}出：<b>${STUDY.idiomLast}</b></div>
+    <div class="study-in"><input id="iIn" placeholder="用「${STUDY.idiomLast.slice(-1)}」开头接一个"><button id="iGo">接</button></div>
+    <div class="study-msg" id="iMsg">接不上就输入「认输」</div>`;
+  const go=()=>{
+    const t=$('iIn').value.trim(); $('iIn').value='';
+    if(/认输/.test(t)){ $('iMsg').textContent='好嘛，这局算我的。换一个继续！'; STUDY.streak.idiom=0; STUDY.idiomLast=IDIOMS[Math.floor(Math.random()*IDIOMS.length)]; modIdiom(stage); return; }
+    if(t.length!==4 || !IDIOM_SET.has(t)){ $('iMsg').textContent='这不是我认识的成语哦，换一个？'; return; }
+    if(t[0]!==STUDY.idiomLast.slice(-1)){ $('iMsg').textContent=`要用「${STUDY.idiomLast.slice(-1)}」开头呀`; return; }
+    const next=IDIOMS.filter(i=>i[0]===t.slice(-1));
+    STUDY.streak.idiom++;
+    const d=studyData(); d.idiom=Math.max(d.idiom,STUDY.streak.idiom); saveStudy(d); addXP(3); checkAchv();
+    care.mood=Math.min(100,care.mood+4); renderPips();
+    if(!next.length){ $('iMsg').textContent=`「${t}」接得好！我接不上了……你赢了！`; petSay('哇，你赢了！', false); addCoin(5,'成语胜利'); STUDY.idiomLast=''; STUDY.streak.idiom=0; modIdiom(stage); return; }
+    STUDY.idiomLast=next[Math.floor(Math.random()*next.length)];
+    petSay(['有两下子！','接得好！','哼，看我的'][Math.floor(Math.random()*3)], false);
+    modIdiom(stage);
+  };
+  $('iGo').onclick=go; $('iIn').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+}
+/* --- 口算挑战 --- */
+function modMath(stage){
+  const lv=Math.min(3, 1+Math.floor(STUDY.streak.math/5));
+  const a=Math.floor(Math.random()*9*lv)+lv, b=Math.floor(Math.random()*9*lv)+lv;
+  const op=['+','−','×'][Math.floor(Math.random()*3)];
+  const ans=op==='+'?a+b:op==='−'?a-b:a*b;
+  stage.innerHTML=`<div class="card-t">口算挑战 · 连胜 <b id="mStreak">${STUDY.streak.math}</b></div>
+    <div class="study-q"><b>${a} ${op} ${b} = ?</b></div>
+    <div class="study-in"><input id="mIn" type="number" placeholder="心算答案"><button id="mGo">答</button></div>
+    <div class="study-msg" id="mMsg"></div>`;
+  const go=()=>{
+    const v=+$('mIn').value; $('mIn').value='';
+    if(v===ans){ STUDY.streak.math++;
+      const d=studyData(); d.math=Math.max(d.math,STUDY.streak.math); saveStudy(d); addXP(1);
+      care.mood=Math.min(100,care.mood+3); renderPips();
+      petSay(['答对啦！','好快！','数学小天才'][Math.floor(Math.random()*3)], false);
+    } else { STUDY.streak.math=0; $('mMsg').textContent=`是 ${ans} 哦，连胜清零，再来！`; }
+    modMath(stage);
+  };
+  $('mGo').onclick=go; $('mIn').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+}
+/* --- 睡前古诗 --- */
+function modPoem(stage){
+  stage.innerHTML=`<div class="card-t">睡前古诗 · 点一首读给你听</div>`+
+    POEMS.map((p,i)=>`<div class="poem-li" data-i="${i}">${p[0]} · ${p[1]}<span>朗读 →</span></div>`).join('');
+  stage.querySelectorAll('.poem-li').forEach(el=>el.onclick=()=>{
+    const p=POEMS[+el.dataset.i];
+    speak(`${p[0]}，${p[1]}。${p[2]}`);
+    petSay('听完这首诗，就睡觉哦', false);
+  });
+}
+/* --- 番茄专注 --- */
+function modFocus(stage){
+  if(STUDY.focusT){ clearInterval(STUDY.focusT); STUDY.focusT=null; }
+  STUDY.focusSec=25*60;
+  const draw=()=>{ const m=String(Math.floor(STUDY.focusSec/60)), s=String(STUDY.focusSec%60).padStart(2,'0');
+    const el=$('fNum'); if(el) el.textContent=`${m}:${s}`; };
+  stage.innerHTML=`<div class="card-t">番茄专注 · 25 分钟</div>
+    <div class="focus-num" id="fNum">25:00</div>
+    <div class="study-msg">${nick()}会安安静静陪你，不打扰</div>
+    <div class="study-btns"><button class="ok" id="fStart">开始专注</button><button id="fCancel">取消</button></div>`;
+  $('fStart').onclick=()=>{
+    $('petMood').textContent='· 陪伴专注中，嘘';
+    STUDY.focusT=setInterval(()=>{
+      STUDY.focusSec--; draw();
+      if(STUDY.focusSec<=0){ clearInterval(STUDY.focusT); STUDY.focusT=null;
+        const d=studyData(); d.focus+=25; saveStudy(d); addXP(4); addCoin(8,'专注完成');
+        care.bond=Math.min(100,care.bond+2); renderPips();
+        speak('25 分钟到啦，休息一下，喝口水，站起来走走。');
+        petSay('专注完成！你真棒', false); }
+    },1000);
+    $('fStart').disabled=true; $('fStart').textContent='专注中…';
+  };
+  $('fCancel').onclick=()=>{ if(STUDY.focusT){clearInterval(STUDY.focusT);STUDY.focusT=null;} stage.style.display='none'; };
+}
+document.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>openStudy(b.dataset.mod));
+refreshStudyStats();
+
+/* ==================================================================
+ * 开场故事：穿越眠屿星 → 选择伙伴 → 开始陪伴
+ * ================================================================== */
+const STORY=[
+  { bg:null, text:'2099 年。\n失眠，成了人类最大的流行病。' },
+  { bg:'pets/warp.png', text:'那晚睡着后，你做了一场很长很长的梦——\n穿过星光隧道，来到一颗叫「眠屿星」的星球。' },
+  { bg:'pets/planet.png', text:'这里住着一群小精灵。\n它们以美梦为食，最擅长的事，\n就是陪人好好睡觉。' },
+  { bg:'pets/planet.png', text:'长老说：每一只精灵，都会选择\n一位地球人守护。\n——而你，被它们选中了。' },
+  { bg:'pets/planet.png', choose:true, text:'现在，选择你的伙伴吧。' },
+  { bg:'pets/planet.png', text:'%NAME% 跳进了你的怀里。\n从今晚开始，每一个夜晚，\n它都会陪你一起度过。' },
+];
+let stScene=0, typeTimer=null, storyChosen=false;
+function storyScene(i){
+  stScene=i;
+  const sc=STORY[i];
+  const bg=$('storyBg');
+  if(sc.bg){ bg.style.backgroundImage=`url(${sc.bg})`; bg.classList.add('on'); }
+  // 打字机
+  clearInterval(typeTimer);
+  const el=$('storyText'); el.textContent='';
+  const full=sc.text.replace('%NAME%', nick());
+  let c=0;
+  typeTimer=setInterval(()=>{ el.textContent=full.slice(0,++c); if(c>=full.length) clearInterval(typeTimer); }, 55);
+  // 选择环节
+  $('storyPets').classList.toggle('show', !!sc.choose);
+  $('storyGo').classList.remove('show');
+  $('storyHint').textContent = sc.choose ? '随便点，可以换着看 · 满意了点「就是它了」' : '轻触继续';
+  if(sc.choose && !$('storyPets').children.length){
+    Object.keys(PETS).forEach(k=>{
+      const d=document.createElement('div'); d.className='sp'; d.dataset.k=k;
+      d.innerHTML=`<img src="${PETS[k].img}" alt="${PETS[k].name}">`;
+      d.onclick=e=>{
+        e.stopPropagation();
+        document.querySelectorAll('.sp').forEach(x=>x.classList.remove('sel'));
+        d.classList.add('sel');
+        renderPet(k);           // 预览切换，随时可以换
+        $('storyGo').classList.add('show');
+        blip(760);
+      };
+      $('storyPets').appendChild(d);
+    });
+  }
+}
+$('storyGo').onclick=e=>{
+  e.stopPropagation();
+  if(storyChosen) return;
+  storyChosen=true;
+  care.bond=Math.min(100,care.bond+5); renderPips(); addXP(5);
+  blip(880); spawnHearts(5);
+  storyScene(stScene+1);
+};
+function startStory(){ stScene=0; storyChosen=false; $('storyOv').classList.add('show'); storyScene(0); }
+function endStory(){
+  $('storyOv').classList.remove('show');
+  localStorage.setItem('sle_story','1');
+  petSay(`我是${nick()}，以后每个夜晚都陪你`, false);
+}
+$('storyOv').addEventListener('click',()=>{
+  const sc=STORY[stScene];
+  if(sc.choose) return;  // 必须选宠物
+  // 打字未完 → 先补全
+  const full=sc.text.replace('%NAME%',nick());
+  if($('storyText').textContent.length<full.length){ clearInterval(typeTimer); $('storyText').textContent=full; return; }
+  if(stScene<STORY.length-1) storyScene(stScene+1); else endStory();
+});
+$('storySkip').onclick=e=>{ e.stopPropagation(); endStory(); };
+/* ==================================================================
+ * 用户校验：先认识你（称呼必填校验 + 身份），通过后才进入穿越故事
+ * ================================================================== */
+function userInfo(){ try{ return JSON.parse(localStorage.getItem('sle_user'))||null; }catch(e){ return null; } }
+function uname(){ const u=userInfo(); return u?u.name:''; }
+let gateRole='self';
+document.querySelectorAll('#gateRoles button').forEach(b=>b.onclick=()=>{
+  gateRole=b.dataset.role;
+  document.querySelectorAll('#gateRoles button').forEach(x=>x.classList.toggle('on',x===b));
+  $('gateKid').style.display=gateRole==='kid'?'block':'none';
+  $('gateErr').textContent='';
+  blip(660);
+});
+function gateError(msg, inputId){
+  $('gateErr').textContent=msg;
+  if(inputId){ $(inputId).classList.add('err'); setTimeout(()=>$(inputId).classList.remove('err'),1600); }
+  const c=$('gateCard'); c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake');
+}
+$('gateGo').onclick=()=>{
+  const name=$('gateName').value.trim();
+  /* 校验 1：称呼必填，2-8 个字 */
+  if(!name){ gateError('先告诉我怎么称呼你呀','gateName'); return; }
+  if(name.length<2){ gateError('称呼至少 2 个字哦','gateName'); return; }
+  const u={ name, role:gateRole };
+  if(gateRole==='kid'){
+    /* 校验 2：孩子资料 */
+    const kn=$('gateKidName').value.trim(), age=+$('gateAge').value;
+    if(!kn){ gateError('孩子的昵称也告诉我嘛','gateKidName'); return; }
+    if(!age || age<3 || age>12){ gateError('年龄要在 3-12 岁之间','gateAge'); return; }
+    u.kid=kn; u.age=age;
+  }
+  localStorage.setItem('sle_user', JSON.stringify(u));
+  $('gateOv').classList.remove('show');
+  syncUserUI();
+  toast(`${u.name}，校验通过`, false);
+  setTimeout(startStory, 400);   // 校验通过 → 进入穿越故事
+};
+function syncUserUI(){
+  const u=userInfo(); if(!u) return;
+  const hh=new Date().getHours();
+  $('greet').textContent=(hh>=18||hh<5?'晚上好':(hh<12?'早上好':'下午好'))+'，'+u.name;
+  $('userCard').innerHTML=`
+    <div class="li"><span class="k">称呼</span><span class="d">${u.name}</span></div>
+    <div class="li"><span class="k">模式</span><span class="d">${u.role==='kid'?`陪孩子睡 · ${u.kid}（${u.age} 岁）`:'我自己睡'}</span></div>
+    <div class="li" style="cursor:pointer" id="editUser"><span class="k">资料</span><span class="d" style="color:var(--terra)">修改 →</span></div>`;
+  $('editUser').onclick=()=>{ $('gateOv').classList.add('show'); };
+}
+/* 首次进入：先校验，再故事；老用户直接进 */
+if(!userInfo()){ setTimeout(()=>$('gateOv').classList.add('show'), 500); }
+else if(!localStorage.getItem('sle_story')){ setTimeout(startStory, 600); }
+syncUserUI();
+
+/* ---------- tab / 时钟 / 初始化 ---------- */
+document.querySelectorAll('.tb').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tb').forEach(x=>x.classList.remove('on')); t.classList.add('on');
+  document.querySelectorAll('.pg').forEach(p=>p.classList.toggle('on', p.id==='pg-'+t.dataset.tab));
+});
+$('vol').oninput=e=>{ if(master) master.gain.value=e.target.value/100; };
+/* 定时关闭音景 */
+let sleepTimerT=null;
+document.querySelectorAll('.sleep-timer').forEach(b=>b.onclick=()=>{
+  clearTimeout(sleepTimerT); sleepTimerT=null;
+  document.querySelectorAll('.sleep-timer').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  const min=+b.dataset.min;
+  if(min>0){
+    sleepTimerT=setTimeout(()=>{
+      stopScape(); toast('定时到 · 音景已自动关闭');
+      document.querySelectorAll('.sleep-timer').forEach(x=>x.classList.toggle('on',x.dataset.min==='0'));
+    }, min*60*1000/demoSpeed);
+    toast(min+' 分钟后自动关闭音景');
+  } else toast('定时关闭已取消');
+});
+setInterval(()=>{ $('clock').textContent=nowHM(); $('hudTime').textContent=nowHM(); }, 1000); $('clock').textContent=nowHM(); $('hudTime').textContent=nowHM();
+const h=new Date().getHours();
+if(!userInfo()) $('greet').textContent = h>=18||h<5 ? '晚上好' : (h<12?'早上好':'下午好');
+const savedWake=localStorage.getItem('sle_wake'); if(savedWake) $('wakeTime').value=savedWake;
+const savedBed=localStorage.getItem('sle_bed'); if(savedBed) $('bedTime').value=savedBed;
+$('replayStory').onclick=()=>{ startStory(); };
+/* 嗓音设置 */
+function fillVoiceSel(){
+  const sel=$('voiceSel'); if(!sel) return;
+  const vs=zhVoices(); sel.innerHTML='';
+  vs.forEach(v=>{ const o=document.createElement('option'); o.value=v.name; o.textContent=v.name; sel.appendChild(o); });
+  if(zhVoice) sel.value=zhVoice.name;
+}
+function syncVoiceUI(){
+  $('vRate').value=voiceCfg().rate; $('vPitch').value=voiceCfg().pitch;
+  $('vRateT').textContent=voiceCfg().rate.toFixed(2)+'x';
+  $('vPitchT').textContent=voiceCfg().pitch.toFixed(2);
+}
+fillVoiceSel(); syncVoiceUI();
+$('voiceSel').onchange=e=>{ localStorage.setItem('sle_voice',e.target.value); pickVoice(); };
+$('vRate').oninput=e=>{ localStorage.setItem('sle_vrate',e.target.value); syncVoiceUI(); };
+$('vPitch').oninput=e=>{ localStorage.setItem('sle_vpitch',e.target.value); syncVoiceUI(); };
+$('vTest').onclick=()=>{ speechSynthesis.cancel(); speak('晚安，做个好梦呀。我是小眠，今晚也陪着你。'); };
+/* 宠物改名 */
+$('nickIn').placeholder=nick();
+$('nickSave').onclick=()=>{
+  const v=$('nickIn').value.trim();
+  if(v) localStorage.setItem('sle_petname',v); else localStorage.removeItem('sle_petname');
+  $('nickIn').value=''; $('nickIn').placeholder=nick();
+  $('petName').textContent=nick(); petIdle();
+  petSay(v?`我以后就叫${v}啦，请多关照`:'名字恢复默认啦', true);
+};
+/* LLM 设置 */
+['llmKey','llmEp','llmModel'].forEach(id=>{ const v=localStorage.getItem('sle_'+id); if(v) $(id).value=v; });
+$('llmSave').onclick=()=>{
+  localStorage.setItem('sle_llmKey',$('llmKey').value.trim());
+  localStorage.setItem('sle_llmEp',$('llmEp').value.trim());
+  localStorage.setItem('sle_llmModel',$('llmModel').value.trim());
+  /* converse() 读取的键名 */
+  localStorage.setItem('sle_llm_key',$('llmKey').value.trim());
+  localStorage.setItem('sle_llm_ep',$('llmEp').value.trim()||'https://api.moonshot.cn/v1/chat/completions');
+  localStorage.setItem('sle_llm_model',$('llmModel').value.trim()||'kimi-k2-0905-preview');
+  toast($('llmKey').value.trim()?'已保存 · 自由对话已启用':'已清空 · 使用内置应答');
+};
+renderRecipes(); renderReport(); renderNights();
+/* 连点圆盘 5 次：演示加速 ×20（路演用） */
+let tapN=0, tapT=null;
+$('orbMd').parentElement.addEventListener('pointerdown',()=>{
+  tapN++; clearTimeout(tapT); tapT=setTimeout(()=>tapN=0,1200);
+  if(tapN>=5){ tapN=0; demoSpeed=demoSpeed===1?20:1;
+    toast(demoSpeed>1?'演示模式 ×20 已开':'恢复正常速度'); }
+});
+/* ---------- 多闹钟 · 提醒 ---------- */
+function alarms(){ try{ return JSON.parse(localStorage.getItem('sle_alarms'))||[]; }catch(e){ return []; } }
+function saveAlarms(a){ localStorage.setItem('sle_alarms',JSON.stringify(a)); renderAlarms(); }
+function renderAlarms(){
+  const box=$('alarmList');
+  const list=alarms();
+  box.innerHTML=list.length? '' : '<div style="font-size:10px;color:var(--mut2);padding:4px 0 8px">还没有提醒，下面加一个</div>';
+  list.forEach((a,i)=>{
+    const row=document.createElement('div'); row.className='alarm-row'+(a.on?'':' off');
+    row.innerHTML=`<span class="at">${a.t}</span><span class="al">${a.label||'提醒'}</span>
+      <button class="ax tg">${a.on?'开':'关'}</button><button class="ax del">删</button>`;
+    row.querySelector('.tg').onclick=()=>{ const l=alarms(); l[i].on=!l[i].on; saveAlarms(l); };
+    row.querySelector('.del').onclick=()=>{ const l=alarms(); l.splice(i,1); saveAlarms(l); toast('已删除'); };
+    box.appendChild(row);
+  });
+}
+$('alAdd').onclick=()=>{
+  const t=$('alTime').value; if(!t){ toast('先选个时间'); return; }
+  const l=alarms(); l.push({t, label:$('alLabel').value.trim(), on:true});
+  l.sort((a,b)=>a.t.localeCompare(b.t));
+  saveAlarms(l); $('alLabel').value='';
+  toast('已添加 '+t+' 的提醒'); blip(880);
+};
+let alarmFired={};
+setInterval(()=>{
+  const hm=nowHM();
+  alarms().forEach((a,i)=>{
+    const key=new Date().toDateString()+'_'+a.t+'_'+i;
+    if(a.on && a.t===hm && !alarmFired[key]){
+      alarmFired[key]=1;
+      blip(880); setTimeout(()=>blip(1100),300);
+      const msg=a.label?`${a.t} 啦，${a.label}`:`${a.t} 的闹钟响啦`;
+      petSay(msg, true); toast(msg, true);
+      feed(hm, '提醒触发 · '+(a.label||'闹钟'));
+    }
+  });
+}, 20000);
+renderAlarms();
+/* ---------- 天气（wttr.in 免 key，失败静默） ---------- */
+fetch('https://wttr.in/?format=j1').then(r=>r.json()).then(j=>{
+  const c=j.current_condition&&j.current_condition[0];
+  if(!c) return;
+  const raw=(c.lang_zh&&c.lang_zh[0]&&c.lang_zh[0].value)||(c.weatherDesc&&c.weatherDesc[0]&&c.weatherDesc[0].value)||'';
+  const WX_ZH={Clear:'晴',Sunny:'晴','Partly cloudy':'多云',Cloudy:'阴',Overcast:'阴',Mist:'薄雾',Fog:'雾',Rain:'雨','Light rain':'小雨','Moderate rain':'中雨','Heavy rain':'大雨','Light drizzle':'毛毛雨',Drizzle:'毛毛雨','Patchy rain possible':'零星小雨','Patchy light rain':'零星小雨',Thunderstorm:'雷阵雨','Thundery outbreaks possible':'可能有雷暴',Snow:'雪','Light snow':'小雪','Heavy snow':'大雪',Sleet:'雨夹雪',Haze:'霾','Smoky haze':'霾',Smoke:'霾','Blowing snow':'吹雪','Freezing fog':'冻雾'};
+  const desc=WX_ZH[raw]||raw;
+  wxText=`${desc} ${c.temp_C}°C`;
+  $('wxInline').textContent='　·　'+wxText;
+}).catch(()=>{});
+/* ==================================================================
+ * 金币商城 + 被动学习：按时作息赚币，商城养宠；睡前轻声复习
+ * ================================================================== */
+let starBoost=false;
+function coins(){ return +(localStorage.getItem('sle_coins')||0); }
+function addCoin(n, why){
+  const c=coins()+n; localStorage.setItem('sle_coins',c);
+  $('coinNum').textContent=c;
+  if(why){ toast(`+${n} 金币 · ${why}`); feed(nowHM(),`金币 +${n} · ${why}`); }
+  renderShop();
+}
+const SHOP=[
+  { id:'tea',   name:'晚安茶礼盒', price:15,  ds:'心情 +8 · 精力 +5',  use(){ care.mood=Math.min(100,care.mood+8); care.energy=Math.min(100,care.energy+5); } },
+  { id:'cake',  name:'草莓蛋糕',   price:20,  ds:'心情 +20',           use(){ care.mood=Math.min(100,care.mood+20); } },
+  { id:'juice', name:'元气果汁',   price:25,  ds:'精力 +30',           use(){ care.energy=Math.min(100,care.energy+30); } },
+  { id:'bell',  name:'亲密铃铛',   price:40,  ds:'亲密 +10',           use(){ care.bond=Math.min(100,care.bond+10); } },
+  { id:'candy', name:'彩虹软糖',   price:50,  ds:'经验 +30',           use(){ addXP(30); } },
+  { id:'star',  name:'星空投影灯', price:100, ds:'今晚屏幕星空更亮更密', use(){ starBoost=true; setScene(state.asleep?'night':''); } },
+];
+function renderShop(){
+  const c=coins(); $('coinNum').textContent=c;
+  const box=$('shopList'); box.innerHTML='';
+  SHOP.forEach(it=>{
+    const el=document.createElement('div'); el.className='shop-item';
+    el.innerHTML=`<div class="si-inf"><div class="si-nm">${it.name}</div><div class="si-ds">${it.ds}</div></div>
+      <button class="si-buy${c<it.price?' poor':''}">${it.price} 币</button>`;
+    el.querySelector('.si-buy').onclick=()=>{
+      if(coins()<it.price) return;
+      localStorage.setItem('sle_coins', coins()-it.price);
+      it.use(); renderPips(); spawnHearts(3); blip(880);
+      petSay(`${it.name}！谢谢你，我好开心`, true);
+      feed(nowHM(),`商城购入【${it.name}】 -${it.price} 币`);
+      renderShop();
+    };
+    box.appendChild(el);
+  });
+}
+renderShop();
+/* ---------- 弱词本：它记得你不熟的词 ---------- */
+function getWeak(){ try{ return JSON.parse(localStorage.getItem('sle_weak'))||[]; }catch(e){ return []; } }
+function saveWeak(w){ localStorage.setItem('sle_weak',JSON.stringify(w)); renderWeakList(); }
+function addWeak(wordArr){
+  const w=getWeak().filter(x=>x[0]!==wordArr[0]);
+  w.push(wordArr); saveWeak(w.slice(-20));
+}
+function dropWeak(word){ saveWeak(getWeak().filter(x=>x[0]!==word)); }
+function renderWeakList(){
+  const w=getWeak();
+  $('weakList').innerHTML=w.length
+    ? w.map(x=>`<b style="color:var(--gold)">${x[0]}</b>　<span style="color:var(--mut2)">${x[2]}</span>`).join('<br>')
+    : '<span style="color:var(--mut2)">还没有生词。背单词时点「不认识」，它就会记住。</span>';
+}
+renderWeakList();
+/* ---------- 被动复习：睡前轻声读给你听 ---------- */
+let pendingPassive=false;
+function askPassive(){
+  const weak=getWeak();
+  pendingPassive=true;
+  $('passT').textContent=weak.length
+    ? `睡前要不要复习一下？\n你最近有 ${Math.min(5,weak.length)} 个不熟的单词`
+    : '睡前要不要听首古诗？\n我轻声读给你听';
+  $('passOv').classList.add('show');
+  petSay('要不要复习一下再睡？说好或者不用', true);
+}
+function closePassive(){ pendingPassive=false; $('passOv').classList.remove('show'); }
+$('passYes').onclick=()=>{ closePassive(); startPassive(); };
+$('passNo').onclick=()=>{ closePassive(); petSay('好，那我们直接睡觉', true); };
+function startPassive(){
+  audio();
+  const weak=getWeak().slice(0,5);
+  if(weak.length){
+    speak('好，闭上眼睛听就好，不用回答我。');
+    weak.forEach(w=>{ speakEn(w[0]); speak(w[2].replace(/^\w+\.\s*/,'')); });
+    speak('复习完啦，你真棒。现在安心睡吧，晚安。');
+    addCoin(5,'睡前复习');
+  } else {
+    const p=POEMS[Math.floor(Math.random()*POEMS.length)];
+    speak('好，那我读一首古诗给你听。'+p[0]+'，'+p[1]+'。'+p[2]);
+    speak('晚安，做个好梦。');
+    addCoin(3,'睡前听诗');
+  }
+}
+$('passNow').onclick=()=>{ startPassive(); };
+/* 学习页主动/被动切换 + 睡前邀请开关 */
+document.querySelectorAll('.seg-b').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.seg-b').forEach(x=>x.classList.toggle('on',x===b));
+  $('segAct').style.display=b.dataset.seg==='act'?'':'none';
+  $('segPass').style.display=b.dataset.seg==='pass'?'':'none';
+});
+function syncPassTgl(){ $('passTgl').classList.toggle('off', localStorage.getItem('sle_passive')==='0'); }
+$('passTgl').onclick=()=>{ localStorage.setItem('sle_passive', localStorage.getItem('sle_passive')==='0'?'1':'0'); syncPassTgl(); toast(localStorage.getItem('sle_passive')==='0'?'睡前邀请已关':'睡前邀请已开'); };
+syncPassTgl();
+/* 首次点按尝试启用麦克风噪音感知 */
+document.body.addEventListener('pointerdown', function once(){ initMic(); document.body.removeEventListener('pointerdown', once); }, {once:true});
+</script>
+</body>
+</html>

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>眠屿 SleepIsle S1 · App 高保真原型</title>
+<style>
+/* ================= 设计系统 =================
+   画布：暖纸白 / 墨色 / 赤陶橙 / 暮紫 / 哑金
+   字体：标题衬线（Songti SC），正文无衬线
+============================================= */
+:root{
+  --paper:#F4F0E7; --paper2:#EDE8DC; --ink:#221D16; --ink2:#6E6659; --ink3:#A39A89;
+  --terra:#C96F4A; --gold:#B99A67; --violet:#8E7BD8;
+  --night:#0E0F1C; --night2:#171929; --hair:rgba(255,255,255,.07);
+  --milk:#EDE9DF; --milk2:#9DA2B8; --milk3:#5C6076;
+  --serif:"Songti SC","STSong","Noto Serif SC",serif;
+  --sans:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.35;
+  background-image:radial-gradient(rgba(34,29,22,.05) 1px,transparent 1px);background-size:22px 22px}
+.wrap{max-width:1280px;margin:0 auto;padding:56px 48px 80px;position:relative}
+
+/* ---------- 页头 ---------- */
+.eyebrow{font-size:11px;letter-spacing:4px;color:var(--gold);text-transform:uppercase;margin-bottom:18px}
+header h1{font-family:var(--serif);font-size:46px;font-weight:600;line-height:1.25;letter-spacing:1px}
+header h1 em{font-style:normal;color:var(--terra)}
+header .lede{margin-top:16px;font-size:14px;color:var(--ink2);line-height:2;max-width:620px}
+.topnav{position:absolute;top:60px;right:48px;display:flex;gap:26px}
+.topnav a{font-size:12.5px;color:var(--ink2);text-decoration:none;letter-spacing:1px;padding-bottom:3px;border-bottom:1px solid transparent;transition:.25s}
+.topnav a:hover{color:var(--terra);border-color:var(--terra)}
+.hr{height:1px;background:linear-gradient(90deg,var(--ink),transparent);opacity:.15;margin:44px 0 0}
+
+/* ---------- 主体：真机 + 批注 ---------- */
+.main{display:grid;grid-template-columns:auto 1fr;gap:88px;margin-top:64px;align-items:start}
+.stage{position:sticky;top:40px}
+.stage-cap{margin-top:26px;text-align:center;font-size:11px;letter-spacing:2px;color:var(--ink3)}
+
+/* ---------- 手机壳 ---------- */
+.phone{width:348px;height:716px;border-radius:58px;background:#14151f;padding:11px;position:relative;
+  box-shadow:0 40px 80px -20px rgba(34,29,22,.45),0 0 0 1px rgba(34,29,22,.2),inset 0 0 0 1.5px rgba(255,255,255,.08)}
+.screen{position:relative;width:100%;height:100%;border-radius:47px;overflow:hidden;background:var(--night);color:var(--milk)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:96px;height:26px;border-radius:14px;background:#000;z-index:30}
+.homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:110px;height:4px;border-radius:2px;background:rgba(255,255,255,.35);z-index:30}
+
+/* ---------- App 骨架 ---------- */
+.pg{position:absolute;inset:0;padding:14px 20px 0;display:flex;flex-direction:column;opacity:0;transform:translateY(10px);
+  transition:opacity .35s ease,transform .35s ease;pointer-events:none;overflow:hidden}
+.pg.on{opacity:1;transform:none;pointer-events:auto}
+.statusbar{display:flex;justify-content:space-between;font-size:11px;color:var(--milk3);padding:2px 6px 0;font-weight:500}
+.appnav{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.wordmark{font-family:var(--serif);font-size:17px;letter-spacing:2px;color:var(--milk)}
+.capsule{display:flex;align-items:center;gap:8px;border:1px solid var(--hair);border-radius:999px;padding:4px 12px;font-size:10px;color:var(--milk2)}
+.scroll{flex:1;overflow-y:auto;margin-top:6px;padding-bottom:76px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+/* tabbar */
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:70px;display:flex;background:rgba(14,15,28,.92);
+  backdrop-filter:blur(12px);border-top:1px solid var(--hair);padding:0 8px 12px;z-index:20}
+.tb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;
+  font-size:10px;letter-spacing:2px;color:var(--milk3);transition:.25s}
+.tb i{width:4px;height:4px;border-radius:50%;background:transparent;transition:.25s}
+.tb.on{color:var(--terra)}
+.tb.on i{background:var(--terra)}
+
+/* ---------- App 组件 ---------- */
+.greet{font-family:var(--serif);font-size:23px;margin:14px 2px 2px;letter-spacing:1px}
+.greet-sub{font-size:10.5px;color:var(--milk3);margin:6px 2px 0;letter-spacing:.5px}
+.card{background:var(--night2);border:1px solid var(--hair);border-radius:18px;padding:16px 18px;margin-top:14px}
+.card-t{font-size:10px;letter-spacing:2px;color:var(--milk3);margin-bottom:10px}
+/* 主控圆 */
+.orb-zone{display:flex;flex-direction:column;align-items:center;padding:16px 0 4px;position:relative}
+.orb{position:relative;width:216px;height:216px}
+.orb svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.orb svg circle{fill:none;stroke-linecap:round}
+.orb-core{position:absolute;left:50%;top:50%;width:140px;height:140px;border-radius:50%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;
+  background:radial-gradient(circle at 40% 30%,#252a45,#12142a 72%);
+  box-shadow:inset 0 0 34px rgba(0,0,0,.6),0 0 50px rgba(201,111,74,.1);
+  transition:background 1.4s ease,box-shadow 1.4s ease}
+.orb-core .st{font-size:8.5px;letter-spacing:2px;color:var(--milk3)}
+.orb-core .md{font-family:var(--serif);font-size:17px;letter-spacing:2px}
+.orb-core .hint{font-size:8px;color:var(--milk3)}
+.orb-core.warm{background:radial-gradient(circle at 42% 32%,#F5C89A,#D97B4A 58%,#5E3319);
+  box-shadow:0 0 70px 18px rgba(217,123,74,.35),inset 0 0 30px rgba(120,60,0,.35)}
+.orb-core.warm .st,.orb-core.warm .hint{color:rgba(255,244,230,.75)}
+.orb-core.night{background:radial-gradient(circle at 42% 32%,#1b1740,#0a0918 75%);box-shadow:0 0 46px 8px rgba(142,123,216,.14),inset 0 0 44px rgba(0,0,0,.7)}
+.orb-core.breath{animation:breathe 8s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.05)}}
+.orb-meta{display:flex;gap:22px;margin-top:12px;font-size:9px;letter-spacing:1.5px;color:var(--milk3)}
+.orb-meta b{font-weight:500;color:var(--milk2)}
+/* 按钮 */
+.btn-p{display:block;width:100%;padding:14px;border:none;border-radius:999px;cursor:pointer;margin-top:14px;
+  background:linear-gradient(120deg,var(--terra),#DA9660);color:#1F1409;font-size:13px;letter-spacing:4px;font-weight:600;
+  transition:.3s;box-shadow:0 10px 24px -8px rgba(201,111,74,.5)}
+.btn-p:hover{filter:brightness(1.08)}
+.btn-g{background:none;border:1px solid var(--hair);color:var(--milk2);border-radius:999px;padding:11px 0;
+  font-size:11px;letter-spacing:2px;cursor:pointer;flex:1;transition:.25s}
+.btn-g:hover{border-color:var(--terra);color:var(--terra)}
+.btn-row{display:flex;gap:10px;margin-top:12px}
+/* 今晚编排 */
+.plan-li{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair);font-size:11.5px}
+.plan-li:last-child{border:none}
+.plan-li .t{color:var(--gold);font-size:10px;letter-spacing:1px;flex-shrink:0;margin-right:12px}
+.plan-li .d{color:var(--milk2);text-align:right;font-size:10.5px}
+/* 音景 */
+.hero-rcp{position:relative;overflow:hidden;border-radius:20px;margin-top:14px;padding:20px;
+  background:linear-gradient(140deg,#2A2545,#171929 65%);border:1px solid var(--hair)}
+.hero-rcp .tag{position:absolute;top:16px;right:16px;font-size:9px;letter-spacing:2px;color:var(--violet);border:1px solid rgba(142,123,216,.4);border-radius:999px;padding:3px 10px}
+.hero-rcp .nm{font-family:var(--serif);font-size:21px;letter-spacing:2px}
+.hero-rcp .rs{font-size:10px;color:var(--milk2);margin-top:8px;line-height:1.8}
+.mix{display:flex;gap:4px;margin:14px 0 16px}
+.mix i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.08);position:relative;overflow:hidden}
+.mix i::after{content:'';position:absolute;inset:0;width:var(--w);background:linear-gradient(90deg,var(--terra),var(--gold))}
+.mix-lb{display:flex;gap:4px;font-size:8px;color:var(--milk3);margin-top:-10px;margin-bottom:4px}
+.mix-lb span{flex:1}
+.playbtn{width:44px;height:44px;border-radius:50%;border:1px solid var(--terra);background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:.25s}
+.playbtn .tri{width:0;height:0;border-left:11px solid var(--terra);border-top:7px solid transparent;border-bottom:7px solid transparent;margin-left:3px}
+.playbtn.on{background:var(--terra)}
+.playbtn.on .tri{border:none;width:10px;height:12px;margin:0;border-left:3.5px solid #1F1409;border-right:3.5px solid #1F1409}
+.rcp-li{display:flex;align-items:center;gap:14px;padding:14px 2px;border-bottom:1px solid var(--hair)}
+.rcp-li .no{font-family:var(--serif);font-size:13px;color:var(--gold);width:20px}
+.rcp-li .inf{flex:1}
+.rcp-li .nm{font-size:12.5px;letter-spacing:1px}
+.rcp-li .ds{font-size:9.5px;color:var(--milk3);margin-top:3px}
+.rcp-li .mini{width:30px;height:30px;border-radius:50%;border:1px solid var(--hair);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.25s}
+.rcp-li .mini .tri{border-left:8px solid var(--milk2);border-top:5px solid transparent;border-bottom:5px solid transparent;width:0;height:0;margin-left:2px}
+.rcp-li .mini:hover{border-color:var(--terra)}
+.rcp-li .mini.on{border-color:var(--terra);background:rgba(201,111,74,.15)}
+.rcp-li .mini.on .tri{border:none;width:8px;height:9px;border-left:2.5px solid var(--terra);border-right:2.5px solid var(--terra)}
+/* 报告 */
+.score-wrap{display:flex;align-items:center;gap:20px}
+.score-ring{position:relative;width:104px;height:104px;flex-shrink:0}
+.score-ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.score-ring .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score-ring .mid b{font-family:var(--serif);font-size:30px;font-weight:600}
+.score-ring .mid span{font-size:8.5px;letter-spacing:2px;color:var(--milk3)}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1}
+.kpi{background:rgba(255,255,255,.03);border-radius:12px;padding:9px 10px}
+.kpi .k{font-size:8.5px;letter-spacing:1px;color:var(--milk3);white-space:nowrap}
+.kpi .v{font-family:var(--serif);font-size:13.5px;margin-top:4px;color:var(--milk);white-space:nowrap}
+.chart{display:flex;align-items:flex-end;gap:4px;height:64px;margin-top:6px}
+.chart i{flex:1;border-radius:4px 4px 2px 2px;opacity:.9}
+.legend{display:flex;gap:14px;font-size:8.5px;color:var(--milk3);margin-top:10px}
+.legend s{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;text-decoration:none;vertical-align:-1px}
+.ev-li{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--hair);font-size:11px;color:var(--milk2)}
+.ev-li:last-child{border:none}
+.ev-li .tm{font-size:9px;color:var(--milk3)}
+.say{background:#221D38;border:1px solid rgba(142,123,216,.18);border-radius:4px 16px 16px 16px;padding:14px 16px;margin-top:14px;
+  font-size:11.5px;line-height:2;color:var(--milk)}
+.say b{display:block;font-size:9px;letter-spacing:2px;color:var(--violet);margin-bottom:6px;font-weight:500}
+/* 我的 */
+.me-head{display:flex;align-items:center;gap:14px;margin-top:16px}
+.avatar{width:52px;height:52px;border-radius:50%;background:linear-gradient(140deg,var(--gold),var(--terra));
+  display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:19px;color:#1F1409}
+.me-head .nm{font-family:var(--serif);font-size:16px;letter-spacing:1px}
+.me-head .ds{font-size:9.5px;color:var(--milk3);margin-top:4px}
+.pro{margin-top:16px;border-radius:20px;padding:18px 20px;color:#F5EFE2;
+  background:linear-gradient(135deg,#3A2E56,#1D1B33 70%);border:1px solid rgba(142,123,216,.25)}
+.pro .t{font-family:var(--serif);font-size:15px;letter-spacing:2px}
+.pro .p{font-size:10px;color:var(--milk2);margin-top:8px;line-height:1.9}
+.set-li{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--hair);font-size:11.5px}
+.set-li:last-child{border:none}
+.set-li .sub{font-size:9px;color:var(--milk3);margin-top:3px}
+.tgl{width:36px;height:20px;border-radius:11px;background:#3E8F6B;position:relative;cursor:pointer;transition:.3s;flex-shrink:0}
+.tgl::after{content:'';position:absolute;right:2.5px;top:2.5px;width:15px;height:15px;border-radius:50%;background:#fff;transition:.3s}
+.tgl.off{background:#2A2D44}.tgl.off::after{right:18.5px}
+.mem-li{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--hair);font-size:10.5px;color:var(--milk2);line-height:1.8}
+.mem-li:last-child{border:none}
+.mem-li .yr{font-family:var(--serif);color:var(--gold);flex-shrink:0}
+/* toast */
+.toast{position:absolute;left:50%;bottom:88px;transform:translateX(-50%) translateY(8px);background:rgba(237,233,223,.96);color:#221D16;
+  font-size:10.5px;letter-spacing:1px;padding:10px 18px;border-radius:999px;opacity:0;transition:.4s;z-index:40;white-space:nowrap;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%)}
+
+/* ---------- 批注栏 ---------- */
+.notes{padding-top:6px}
+.note{padding:22px 0;border-bottom:1px solid rgba(34,29,22,.1);display:grid;grid-template-columns:44px 1fr;gap:16px}
+.note:first-child{padding-top:0}
+.note .no{font-family:var(--serif);font-size:22px;color:var(--gold);line-height:1.2}
+.note h3{font-family:var(--serif);font-size:16px;letter-spacing:1px;margin-bottom:8px;font-weight:600}
+.note p{font-size:12.5px;color:var(--ink2);line-height:2}
+.note p b{color:var(--ink);font-weight:600}
+.note .k{display:inline-block;font-size:10px;color:var(--terra);letter-spacing:1px;margin-top:8px;border:1px solid rgba(201,111,74,.35);border-radius:999px;padding:2px 10px}
+/* 底部 spec 条 */
+.specs{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(34,29,22,.12);margin-top:72px;border-radius:20px;overflow:hidden}
+.spec{background:var(--paper);padding:24px 26px}
+.spec .k{font-size:10px;letter-spacing:2px;color:var(--ink3)}
+.spec .v{font-family:var(--serif);font-size:19px;margin-top:8px}
+.spec .d{font-size:10.5px;color:var(--ink2);margin-top:6px;line-height:1.7}
+footer{margin-top:56px;font-size:10.5px;letter-spacing:1px;color:var(--ink3);display:flex;justify-content:space-between}
+@media(max-width:1000px){.main{grid-template-columns:1fr;gap:48px}.stage{position:static}.topnav{position:static;margin-top:20px}}
+@media print{body::before,.topnav{display:none}.wrap{padding:24px}.stage{position:static}
+.note{page-break-inside:avoid}.phone{box-shadow:0 0 0 1px rgba(34,29,22,.2)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav">
+    <a href="home.html">套件首页</a>
+    <a href="index.html">可交互模拟器</a>
+    <a href="prototype.html">硬件原型图</a>
+    <a href="DESIGN.md">设计文档</a>
+  </div>
+  <header>
+    <div class="eyebrow">SleepIsle S1 · High-Fidelity App Prototype</div>
+    <h1>一个会照顾人的<br><em>哄睡 Agent</em></h1>
+    <p class="lede">四栏结构：主控 · 音景 · 报告 · 我的。设计原则与硬件一致 —— 晚上打开它的次数应趋近于零，
+      睡前交互全部交给床头设备（语音与触控），App 只在白天用来回看昨夜、调整编排。
+      左侧真机可以直接点击操作。</p>
+    <div class="hr"></div>
+  </header>
+
+  <div class="main">
+    <!-- ============ 真机 ============ -->
+    <div class="stage">
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <!-- ===== 屏 1：主控 ===== -->
+          <section class="pg on" data-pg="home">
+            <div class="statusbar"><span>21:24</span><span>5G&nbsp;&nbsp;100%</span></div>
+            <div class="appnav"><span class="wordmark">眠屿</span><span class="capsule">··· ⊙</span></div>
+            <div class="scroll">
+              <div class="greet">晚安，子涵</div>
+              <div class="greet-sub">今夜编排 · 日落 21:30 → 日出 07:00</div>
+              <div class="orb-zone">
+                <div class="orb">
+                  <svg viewBox="0 0 216 216">
+                    <g id="ticks"></g>
+                    <circle cx="108" cy="108" r="100" stroke="rgba(255,255,255,.06)" stroke-width="3"/>
+                    <circle id="rgSleep" cx="108" cy="108" r="100" stroke="#8E7BD8" stroke-width="3" stroke-dasharray="628" stroke-dashoffset="628"/>
+                    <circle cx="108" cy="108" r="90" stroke="rgba(255,255,255,.06)" stroke-width="3"/>
+                    <circle id="rgSound" cx="108" cy="108" r="90" stroke="#DA9660" stroke-width="3" stroke-dasharray="565" stroke-dashoffset="565"/>
+                  </svg>
+                  <div class="orb-core" id="orbCore">
+                    <span class="st" id="orbSt">设备在线</span>
+                    <span class="md" id="orbMd">待机</span>
+                    <span class="hint" id="orbHint">说「晚安」开始</span>
+                  </div>
+                </div>
+                <div class="orb-meta"><span>睡眠深度 <b id="mSleep">—</b></span><span>音景能量 <b id="mSound">—</b></span></div>
+              </div>
+              <button class="btn-p" id="btnNight">开始晚安</button>
+              <div class="btn-row">
+                <button class="btn-g" data-toast="4-7-8 呼吸练习 · 6 轮">呼吸放松</button>
+                <button class="btn-g" data-toast="播放睡前故事 · 灯塔与猫">睡前故事</button>
+              </div>
+              <div class="card">
+                <div class="card-t">AGENT 今晚待办</div>
+                <div class="plan-li"><span class="t">记忆</span><span class="d">周四你通常难入睡 → 日落提前 15 分钟</span></div>
+                <div class="plan-li"><span class="t">气象</span><span class="d">预报夜间有雷雨 → 遮蔽层已待命</span></div>
+                <div class="plan-li"><span class="t">温度</span><span class="d">凌晨降温 → 02:00 空调调至 24.5°</span></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ===== 屏 2：音景 ===== -->
+          <section class="pg" data-pg="sound">
+            <div class="statusbar"><span>21:26</span><span>5G&nbsp;&nbsp;100%</span></div>
+            <div class="appnav"><span class="wordmark">音景</span><span class="capsule">··· ⊙</span></div>
+            <div class="scroll">
+              <div class="greet-sub" style="margin-top:14px">按你 47 晚的入睡数据排序 · 全部程序实时合成，非录音循环</div>
+              <div class="hero-rcp">
+                <span class="tag">AGENT 首推</span>
+                <div class="nm">雨夜木屋</div>
+                <div class="rs">上周让你平均快 6 分钟入睡<br>细雨 · 壁炉噼啪 · 棕噪铺底</div>
+                <div class="mix"><i style="--w:72%"></i><i style="--w:26%"></i><i style="--w:48%"></i></div>
+                <div class="mix-lb"><span>场景</span><span>底噪</span><span>点缀</span></div>
+                <button class="playbtn" style="margin-top:10px"><span class="tri"></span></button>
+              </div>
+              <div class="card-t" style="margin:22px 2px 4px">全部配方</div>
+              <div class="rcp-li"><span class="no">02</span><div class="inf"><div class="nm">海边小屋</div><div class="ds">海浪 LFO 0.09Hz · 周中使用最多</div></div><div class="mini"><span class="tri"></span></div></div>
+              <div class="rcp-li"><span class="no">03</span><div class="inf"><div class="nm">林间篝火</div><div class="ds">柴火噼啪程序生成 · 永不重复</div></div><div class="mini"><span class="tri"></span></div></div>
+              <div class="rcp-li" style="border:none"><span class="no">04</span><div class="inf"><div class="nm">纯底噪</div><div class="ds">棕噪音 · 深夜码字伴侣</div></div><div class="mini"><span class="tri"></span></div></div>
+              <div class="pro" style="margin-top:18px">
+                <div class="t">眠屿 Pro</div>
+                <div class="p">每周新配方 · 江南梅雨 / 山寺夜钟 / 雪夜木屋<br>明星哄睡音色包 · 故事库周更 · ¥15/月</div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ===== 屏 3：报告 ===== -->
+          <section class="pg" data-pg="report">
+            <div class="statusbar"><span>07:12</span><span>5G&nbsp;&nbsp;100%</span></div>
+            <div class="appnav"><span class="wordmark">睡眠报告</span><span class="capsule">··· ⊙</span></div>
+            <div class="scroll">
+              <div class="greet-sub" style="margin-top:14px">10 月 9 日 · 昨夜 · 雷达分期 κ 0.70</div>
+              <div class="card">
+                <div class="score-wrap">
+                  <div class="score-ring">
+                    <svg viewBox="0 0 104 104">
+                      <circle cx="52" cy="52" r="46" stroke="rgba(255,255,255,.06)" stroke-width="5" fill="none"/>
+                      <circle cx="52" cy="52" r="46" stroke="#7FBF9B" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="40"/>
+                    </svg>
+                    <div class="mid"><b>86</b><span>睡眠分</span></div>
+                  </div>
+                  <div class="kpis">
+                    <div class="kpi"><div class="k">入睡用时</div><div class="v">23 分钟</div></div>
+                    <div class="kpi"><div class="k">深睡占比</div><div class="v">31%</div></div>
+                    <div class="kpi"><div class="k">夜醒</div><div class="v">1 次·4 分</div></div>
+                    <div class="kpi"><div class="k">翻身</div><div class="v">12 次</div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-t">睡眠阶段</div>
+                <div class="chart">
+                  <i style="height:32%;background:#DA9660"></i><i style="height:88%;background:#4A3F7A"></i>
+                  <i style="height:58%;background:#8E7BD8"></i><i style="height:32%;background:#DA9660"></i>
+                  <i style="height:88%;background:#4A3F7A"></i><i style="height:58%;background:#8E7BD8"></i>
+                  <i style="height:32%;background:#DA9660"></i><i style="height:14%;background:#6E86B8"></i>
+                </div>
+                <div class="legend">
+                  <span><s style="background:#DA9660"></s>浅睡</span><span><s style="background:#4A3F7A"></s>深睡</span>
+                  <span><s style="background:#8E7BD8"></s>REM</span><span><s style="background:#6E86B8"></s>清醒</span>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-t">AGENT 昨夜值守</div>
+                <div class="ev-li">为你遮蔽了 3 次雷雨噪音<span class="tm">02:41</span></div>
+                <div class="ev-li">打鼾 2 次，已自动掩蔽<span class="tm">01:15</span></div>
+                <div class="ev-li" style="border:none">夜醒陪护 1 次，灯光保持熄灭<span class="tm">03:12</span></div>
+              </div>
+              <div class="say"><b>眠屿 AGENT</b>昨晚雷雨你完全没醒，很好。今晚试试 22:45 前上床？你的数据说，周四早睡 15 分钟，周五状态最好。</div>
+            </div>
+          </section>
+
+          <!-- ===== 屏 4：我的 ===== -->
+          <section class="pg" data-pg="me">
+            <div class="statusbar"><span>15:32</span><span>5G&nbsp;&nbsp;100%</span></div>
+            <div class="appnav"><span class="wordmark">我的</span><span class="capsule">··· ⊙</span></div>
+            <div class="scroll">
+              <div class="me-head">
+                <div class="avatar">涵</div>
+                <div><div class="nm">子涵</div><div class="ds">眠屿 S1 · 卧室 · 已陪伴 47 晚</div></div>
+              </div>
+              <div class="pro">
+                <div class="t">眠屿 Pro · 试用中</div>
+                <div class="p">剩余 12 天 · 已为你生成 6 条专属建议<br>为个性化付费，不为功能付费</div>
+              </div>
+              <div class="card">
+                <div class="card-t">记忆层 · 它对你的了解</div>
+                <div class="mem-li"><span class="yr">壹</span>海浪比雨声让你快 6 分钟入睡</div>
+                <div class="mem-li"><span class="yr">贰</span>周四入睡最难，已自动提前日落</div>
+                <div class="mem-li" style="border:none"><span class="yr">叁</span>室温 24.5° 时你的深睡最长</div>
+              </div>
+              <div class="card">
+                <div class="card-t">隐私 · 卧室红线</div>
+                <div class="set-li"><div>整夜本地闭环<div class="sub">分期与决策全部端侧，数据不出卧室</div></div><div class="tgl"></div></div>
+                <div class="set-li"><div>匿名周报统计<div class="sub">只上传分数，不含任何原始数据</div></div><div class="tgl off"></div></div>
+                <div class="set-li" style="border:none"><div>麦克风物理静音<div class="sub">设备背面拨杆 · 硬件级断电</div></div><div style="font-size:9px;color:#7FBF9B;letter-spacing:1px">已开启</div></div>
+              </div>
+              <div class="card">
+                <div class="set-li" style="border:none"><div>家人守护<div class="sub">远程查看父母卧室的眠屿：睡着没、起夜几次</div></div><div class="tgl"></div></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- tabbar -->
+          <div class="tabbar">
+            <div class="tb on" data-tab="home"><i></i>主控</div>
+            <div class="tb" data-tab="sound"><i></i>音景</div>
+            <div class="tb" data-tab="report"><i></i>报告</div>
+            <div class="tb" data-tab="me"><i></i>我的</div>
+          </div>
+          <div class="toast" id="toast"></div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+      <div class="stage-cap">HIGH-FIDELITY · 可点击 · 1:1</div>
+    </div>
+
+    <!-- ============ 批注 ============ -->
+    <div class="notes">
+      <div class="note"><div class="no">壹</div><div>
+        <h3>主控屏 —— 打开率最高，但目标是「不用打开」</h3>
+        <p>中央圆是床头设备的<b>实时镜像</b>：外环睡眠深度、内环音景能量，刻度隐喻"一整夜"。
+        「Agent 今晚待办」是差异化核心 —— 睡前告诉你它今晚打算如何照顾你，<b>记忆层的价值直接外化</b>。</p>
+        <span class="k">试试：点「开始晚安」，圆盘进入日落态</span>
+      </div></div>
+      <div class="note"><div class="no">贰</div><div>
+        <h3>音景屏 —— 订阅的货架</h3>
+        <p>排序由你的<b>入睡效率数据</b>决定，而非编辑喜好。每个配方露出三层混音条（场景/底噪/点缀），
+        暗示"这是活的混音，不是录音"。Pro 卖每周新配方与音色包 —— 给订阅一个每周打开的理由。</p>
+        <span class="k">试试：点播放钮，有状态切换</span>
+      </div></div>
+      <div class="note"><div class="no">叁</div><div>
+        <h3>报告屏 —— 价值兑现时刻</h3>
+        <p>别家只说"你睡得怎样"，我们多说一句<b>"我为你做了什么"</b>（遮蔽 3 次雷雨、夜醒陪护 1 次）。
+        Agent 的劳动必须可视化，否则用户觉得它没干活。底部建议用对话气泡，保持陪伴者人格。</p>
+        <span class="k">晨间日活的来源</span>
+      </div></div>
+      <div class="note"><div class="no">肆</div><div>
+        <h3>我的屏 —— 信任与留存</h3>
+        <p>「记忆层」直接展示它学到了什么 —— <b>换一台设备它就忘了你</b>，这是最强的留存钩子。
+        隐私三件套置于显眼处，每条一句人话解释；「家人守护」是 B 端养老的 C 端入口。</p>
+        <span class="k">试试：开关可以拨动</span>
+      </div></div>
+      <div class="note"><div class="no">伍</div><div>
+        <h3>设计语言</h3>
+        <p>画布用暖纸白与衬线，传递"睡前读物"的安静感；App 内屏用深夜蓝黑，按钮一律圆角胶囊、
+        反馈克制。整套系统零 emoji —— 图标由排版、刻度与色彩承担。</p>
+        <span class="k">赤陶橙 = 行动 · 暮紫 = Agent · 哑金 = 记忆</span>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ============ 底部规格条 ============ -->
+  <div class="specs">
+    <div class="spec"><div class="k">结构</div><div class="v">四栏 + 卡片</div><div class="d">Agent 动态与整晚编排从主页进入，不占 tab</div></div>
+    <div class="spec"><div class="k">载体</div><div class="v">微信小程序优先</div><div class="d">触达成本低，"爸妈的睡眠报告"可转发裂变</div></div>
+    <div class="spec"><div class="k">通信</div><div class="v">经米家 / openvela</div><div class="d">App 不直连硬件 —— 它是 Agent 的成绩单，不是遥控器</div></div>
+    <div class="spec"><div class="k">原则</div><div class="v">夜间零打开</div><div class="d">睡前交互在设备上完成（语音/触控），App 属于白天</div></div>
+  </div>
+
+  <footer>
+    <span>SLEEPISLE S1 · APP PROTOTYPE V1.0</span>
+    <span>配套：index.html 模拟器 · prototype.html 硬件 · 设计文档 docx</span>
+  </footer>
+</div>
+
+<script>
+/* tab 切换 */
+const tabs=document.querySelectorAll('.tb'), pgs=document.querySelectorAll('.pg');
+tabs.forEach(t=>t.onclick=()=>{
+  tabs.forEach(x=>x.classList.remove('on')); t.classList.add('on');
+  pgs.forEach(p=>p.classList.toggle('on', p.dataset.pg===t.dataset.tab));
+});
+/* toast */
+let toastTimer=null;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),2200);
+}
+document.querySelectorAll('[data-toast]').forEach(b=>b.onclick=()=>toast(b.dataset.toast));
+/* 主控圆：刻度 + 开始晚安 */
+const ticks=document.getElementById('ticks');
+for(let i=0;i<60;i++){
+  const a=i/60*Math.PI*2, r1=110, r2=i%15===0?103:107;
+  const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+  l.setAttribute('x1',108+Math.cos(a)*r1); l.setAttribute('y1',108+Math.sin(a)*r1);
+  l.setAttribute('x2',108+Math.cos(a)*r2); l.setAttribute('y2',108+Math.sin(a)*r2);
+  l.setAttribute('stroke', i%15===0?'rgba(255,255,255,.22)':'rgba(255,255,255,.08)');
+  l.setAttribute('stroke-width','1');
+  ticks.appendChild(l);
+}
+const orbCore=document.getElementById('orbCore');
+let night=false;
+document.getElementById('btnNight').onclick=()=>{
+  night=!night;
+  if(night){
+    orbCore.classList.add('warm');
+    document.getElementById('orbSt').textContent='日落进行中';
+    document.getElementById('orbMd').textContent='陪伴';
+    document.getElementById('orbHint').textContent='灯光渐暗 · 雨声淡入';
+    document.getElementById('rgSound').style.transition='stroke-dashoffset 2s ease';
+    document.getElementById('rgSound').style.strokeDashoffset=180;
+    document.getElementById('mSound').textContent='64%';
+    document.getElementById('btnNight').textContent='结束';
+    toast('日落灯效已开启 · 雨夜木屋淡入 · 空调 24.5°');
+  }else{
+    orbCore.classList.remove('warm','night','breath');
+    document.getElementById('orbSt').textContent='设备在线';
+    document.getElementById('orbMd').textContent='待机';
+    document.getElementById('orbHint').textContent='说「晚安」开始';
+    document.getElementById('rgSound').style.strokeDashoffset=565;
+    document.getElementById('mSound').textContent='—';
+    document.getElementById('btnNight').textContent='开始晚安';
+    toast('已结束 · 昨夜报告明早生成');
+  }
+};
+orbCore.onclick=()=>toast('按住说话：晚安 / 雨夜木屋 / 带我呼吸');
+/* 播放钮 */
+document.querySelectorAll('.playbtn,.mini').forEach(b=>b.onclick=e=>{
+  e.stopPropagation();
+  const on=b.classList.toggle('on');
+  if(on){ document.querySelectorAll('.playbtn,.mini').forEach(x=>{ if(x!==b) x.classList.remove('on'); });
+    toast('音景淡入中 · Agent 将随你的状态实时混音'); }
+});
+/* 开关 */
+document.querySelectorAll('.tgl').forEach(t=>t.onclick=()=>{
+  t.classList.toggle('off');
+  toast(t.classList.contains('off')?'已关闭':'已开启');
+});
+</script>
+</body>
+</html>

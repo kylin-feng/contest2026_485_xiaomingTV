@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>眠屿 SleepIsle S1 · 硬件原型图</title>
+<style>
+/* ================= 设计系统（与 app.html 同源） ================= */
+:root{
+  --paper:#F4F0E7; --paper2:#EDE8DC; --ink:#221D16; --ink2:#6E6659; --ink3:#A39A89;
+  --terra:#C96F4A; --gold:#B99A67; --violet:#8E7BD8; --sage:#7FBF9B;
+  --night:#0E0F1C; --night2:#171929;
+  --milk:#EDE9DF; --milk2:#9DA2B8; --milk3:#5C6076;
+  --serif:"Songti SC","STSong","Noto Serif SC",serif;
+  --sans:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.35;
+  background-image:radial-gradient(rgba(34,29,22,.05) 1px,transparent 1px);background-size:22px 22px}
+.wrap{max-width:1180px;margin:0 auto;padding:56px 48px 80px;position:relative}
+.eyebrow{font-size:11px;letter-spacing:4px;color:var(--gold);text-transform:uppercase;margin-bottom:18px}
+h1{font-family:var(--serif);font-size:44px;font-weight:600;line-height:1.28;letter-spacing:1px}
+h1 em{font-style:normal;color:var(--terra)}
+.lede{margin-top:16px;font-size:14px;color:var(--ink2);line-height:2;max-width:640px}
+.topnav{position:absolute;top:64px;right:48px;display:flex;gap:26px}
+.topnav a{font-size:12.5px;color:var(--ink2);text-decoration:none;letter-spacing:1px;padding-bottom:3px;border-bottom:1px solid transparent;transition:.25s}
+.topnav a:hover{color:var(--terra);border-color:var(--terra)}
+/* ---------- 章节骨架 ---------- */
+section{margin-top:84px}
+.sec-head{display:flex;align-items:baseline;gap:18px;border-bottom:1px solid rgba(34,29,22,.14);padding-bottom:16px}
+.sec-head .no{font-family:var(--serif);font-size:30px;color:var(--gold)}
+.sec-head h2{font-family:var(--serif);font-size:24px;font-weight:600;letter-spacing:1px}
+.sec-head .en{margin-left:auto;font-size:10px;letter-spacing:3px;color:var(--ink3)}
+.sec-sub{margin:14px 0 34px;font-size:12.5px;color:var(--ink2);line-height:2}
+/* ---------- 硬件主视觉 ---------- */
+.hero-stage{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px;margin:20px 0 10px}
+.co{position:relative;font-size:11px;line-height:1.9;color:var(--ink2)}
+.co b{display:block;font-family:var(--serif);font-size:13px;color:var(--ink);letter-spacing:1px;margin-bottom:3px}
+.co.r{text-align:left}.co.l{text-align:right}
+.co .line{display:inline-block;vertical-align:middle;width:56px;height:1px;background:var(--ink3);opacity:.55;margin:0 10px}
+.co .dot{display:inline-block;vertical-align:middle;width:5px;height:5px;border-radius:50%;background:var(--terra)}
+.co-group{display:flex;flex-direction:column;gap:44px}
+/* 设备本体（燕麦织物 + 赤陶光环） */
+.dev-wrap{position:relative;width:340px;height:340px;display:flex;align-items:center;justify-content:center}
+.dev-halo{position:absolute;width:330px;height:330px;border-radius:50%;
+  background:radial-gradient(circle,rgba(201,111,74,.22),transparent 62%)}
+.dev-ring{position:absolute;width:262px;height:262px;border-radius:50%;
+  border:6px solid rgba(201,111,74,.9);
+  box-shadow:0 0 34px 6px rgba(201,111,74,.4),inset 0 0 22px rgba(201,111,74,.28)}
+.dev-dome{position:relative;width:238px;height:238px;border-radius:50%;
+  background:
+    repeating-conic-gradient(from 8deg,rgba(34,29,22,.028) 0deg 2deg,transparent 2deg 4deg),
+    radial-gradient(circle at 40% 28%,#E4DDCE,#C9C1AE 48%,#8F8773 82%,#6E6754);
+  box-shadow:inset -16px -22px 46px rgba(34,29,22,.3),inset 12px 14px 34px rgba(255,252,244,.5),0 26px 50px -12px rgba(34,29,22,.4)}
+.dev-led{position:absolute;left:50%;top:66%;width:6px;height:6px;border-radius:50%;transform:translateX(-50%);
+  background:var(--sage);box-shadow:0 0 10px var(--sage)}
+.dev-shadow{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:190px;height:16px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(34,29,22,.3),transparent 70%)}
+.hero-cap{text-align:center;font-size:10.5px;letter-spacing:2px;color:var(--ink3);margin-top:6px}
+/* ---------- 三视图 ---------- */
+.views{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(34,29,22,.12);border-radius:20px;overflow:hidden;margin-top:48px}
+.view{background:var(--paper);padding:34px 24px 26px;text-align:center}
+.view .vc{margin-top:16px;font-size:11px;letter-spacing:2px;color:var(--ink3)}
+.view .vs{margin-top:5px;font-size:10px;color:var(--ink2);line-height:1.8}
+svg.drawing{width:100%;max-width:230px}
+svg.drawing text{fill:var(--ink2);font-size:9px;letter-spacing:.5px}
+svg.drawing .cl{stroke:var(--ink3);stroke-width:.6}
+svg.drawing .body{fill:#DDD6C6;stroke:#A79E8B;stroke-width:1}
+svg.drawing .body2{fill:#CFC7B4;stroke:#A79E8B;stroke-width:1}
+svg.drawing .light{fill:none;stroke:var(--terra);stroke-width:3}
+svg.drawing .snsr{fill:var(--violet)}
+svg.drawing .warm{fill:var(--terra)}
+/* ---------- 规格表 ---------- */
+table.spec{width:100%;border-collapse:collapse;margin-top:44px;font-size:12.5px}
+table.spec th,table.spec td{padding:14px 16px;border-bottom:1px solid rgba(34,29,22,.12);text-align:left;vertical-align:top;line-height:1.9}
+table.spec th{font-family:var(--serif);font-weight:600;width:150px;letter-spacing:1px;white-space:nowrap}
+table.spec td{color:var(--ink2)}
+table.spec td b{color:var(--terra);font-weight:600}
+/* ---------- Agent 架构 ---------- */
+.arch{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:stretch}
+.flow{display:flex;flex-direction:column}
+.layer{background:#fff;border:1px solid rgba(34,29,22,.1);border-radius:20px;padding:20px 24px;
+  box-shadow:0 10px 30px -18px rgba(34,29,22,.25)}
+.layer .lt{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.layer .lt .n{font-family:var(--serif);font-size:19px;color:var(--terra)}
+.layer .lt .t{font-family:var(--serif);font-size:15px;letter-spacing:1px;font-weight:600}
+.layer .lt .e{margin-left:auto;font-size:9px;letter-spacing:2px;color:var(--ink3)}
+.chipset{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-size:11px;padding:7px 13px;border-radius:999px;border:1px solid rgba(34,29,22,.16);color:var(--ink2);background:var(--paper)}
+.chip.hot{border-color:rgba(201,111,74,.5);color:var(--terra);background:rgba(201,111,74,.06)}
+.farrow{align-self:center;display:flex;align-items:center;gap:10px;padding:9px 0;color:var(--ink3)}
+.farrow i{display:block;width:1px;height:20px;background:var(--ink3)}
+.farrow span{font-size:9.5px;letter-spacing:2px}
+.membox{border:1px solid rgba(185,154,103,.55);border-radius:20px;padding:24px;background:linear-gradient(160deg,#FBF7EE,#F1EADC)}
+.membox .mt{font-family:var(--serif);font-size:15px;letter-spacing:1px;color:var(--gold);margin-bottom:14px}
+.membox p{font-size:11.5px;color:var(--ink2);line-height:2.15}
+.membox .hl{margin-top:12px;padding-top:12px;border-top:1px solid rgba(185,154,103,.4);font-family:var(--serif);font-size:12.5px;color:var(--ink)}
+.loopnote{margin-top:18px;text-align:center;font-size:10.5px;letter-spacing:1px;color:var(--ink3)}
+/* ---------- 时间轴 ---------- */
+.tl{margin-top:8px}
+.tl-bar{display:flex;height:86px;border-radius:18px;overflow:hidden;box-shadow:0 14px 34px -18px rgba(34,29,22,.35)}
+.tl-seg{display:flex;flex-direction:column;justify-content:center;padding:0 16px;color:#F5EFE2;min-width:0}
+.tl-seg b{font-family:var(--serif);font-size:13px;letter-spacing:1px;white-space:nowrap}
+.tl-seg span{font-size:9.5px;opacity:.75;margin-top:5px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-hours{display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:1px;color:var(--ink3);margin-top:10px}
+/* ---------- 状态机 ---------- */
+.fsm{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:center;padding:8px 0 2px}
+.st{padding:11px 20px;border-radius:999px;border:1px solid rgba(34,29,22,.2);font-size:12px;letter-spacing:1px;color:var(--ink2);background:#fff}
+.st.core{border-color:rgba(142,123,216,.55);color:var(--violet);background:rgba(142,123,216,.06)}
+.st.warm{border-color:rgba(201,111,74,.55);color:var(--terra);background:rgba(201,111,74,.06)}
+.st.alert{border-color:rgba(160,60,50,.45);color:#A03C32;background:rgba(160,60,50,.05)}
+.fsm .ar{color:var(--ink3);font-size:13px}
+.fsm-note{text-align:center;font-size:10.5px;color:var(--ink3);margin-top:14px;letter-spacing:1px}
+/* ---------- 剧本 ---------- */
+.scripts{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.script{background:#fff;border:1px solid rgba(34,29,22,.1);border-radius:20px;padding:22px 24px;box-shadow:0 10px 30px -18px rgba(34,29,22,.22)}
+.script .st-t{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.script .st-t .n{font-family:var(--serif);font-size:15px;color:var(--terra)}
+.script .st-t .t{font-family:var(--serif);font-size:14px;letter-spacing:1px;font-weight:600}
+.msg{display:flex;gap:10px;margin-bottom:10px;font-size:12px;line-height:1.9}
+.msg .who{flex-shrink:0;width:36px;font-size:9.5px;letter-spacing:1px;color:var(--ink3);padding-top:6px}
+.msg.dev .bub{background:var(--night2);color:var(--milk);border-radius:4px 16px 16px 16px;padding:10px 14px}
+.msg.usr .bub{background:var(--paper2);border:1px solid rgba(34,29,22,.08);border-radius:16px 4px 16px 16px;padding:10px 14px}
+.msg .act{color:var(--ink3);font-size:10.5px}
+/* ---------- 隐私 ---------- */
+.badges{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(34,29,22,.12);border-radius:20px;overflow:hidden}
+.badge{background:var(--paper);padding:26px 24px}
+.badge .bn{font-family:var(--serif);font-size:19px;color:var(--sage)}
+.badge b{display:block;font-family:var(--serif);font-size:14px;letter-spacing:1px;margin:10px 0 8px}
+.badge span{font-size:11px;color:var(--ink2);line-height:1.9}
+footer{margin-top:72px;display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:1px;color:var(--ink3)}
+footer a{color:var(--terra);text-decoration:none}
+@media(max-width:980px){.hero-stage{grid-template-columns:1fr}.co-group{flex-direction:row;flex-wrap:wrap;gap:18px}
+.views,.badges,.scripts{grid-template-columns:1fr}.arch{grid-template-columns:1fr}.topnav{position:static;margin-top:20px}}
+@media print{body::before,.topnav{display:none}.wrap{padding:24px}
+section{page-break-inside:avoid;margin-top:48px}.tl-bar{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topnav">
+    <a href="home.html">套件首页</a>
+    <a href="index.html">可交互模拟器</a>
+    <a href="app.html">App 原型</a>
+    <a href="DESIGN.md">设计文档</a>
+  </div>
+  <div class="eyebrow">SleepIsle S1 · Hardware Prototype</div>
+  <h1>一轮放在床头的<br><em>小月亮</em></h1>
+  <p class="lede">形态语义决定了它的全部设计：无屏幕、无摄像头；环形灯是它的表情，声音是它的语言。
+    睡前交互只有语音与顶部触控 —— 半夜盲操作，不该有任何需要"看"的东西。</p>
+
+  <!-- ============ 01 硬件主视觉 ============ -->
+  <section>
+    <div class="sec-head"><span class="no">01</span><h2>工业设计与传感器布局</h2><span class="en">INDUSTRIAL DESIGN</span></div>
+    <p class="sec-sub">燕麦织物网罩 + 哑光铝底座 + 磨砂环形柔光罩。"去科技感"家居风 —— Hatch 已验证这种质感对年轻用户的吸引力。</p>
+    <div class="hero-stage">
+      <div class="co-group">
+        <div class="co l"><b>环形柔光罩</b>RGBW · 1800–4000K<br>日落 / 呼吸 / 日出灯效<span class="line"></span><span class="dot"></span></div>
+        <div class="co l"><b>织物网罩</b>燕麦 / 暖灰双色<br>可拆洗<span class="line"></span><span class="dot"></span></div>
+      </div>
+      <div>
+        <div class="dev-wrap">
+          <div class="dev-halo"></div>
+          <div class="dev-ring"></div>
+          <div class="dev-dome"></div>
+          <div class="dev-led"></div>
+          <div class="dev-shadow"></div>
+        </div>
+        <div class="hero-cap">正视渲染 · 日落灯效 · 1:2</div>
+      </div>
+      <div class="co-group">
+        <div class="co r"><span class="dot"></span><span class="line"></span><b>60GHz 毫米波雷达</b>织物下隐藏 · 呼吸/体动/离床</div>
+        <div class="co r"><span class="dot"></span><span class="line"></span><b>状态灯 · 哑光铝底座</b>USB-C 供电 · 480g</div>
+      </div>
+    </div>
+
+    <div class="views">
+      <div class="view">
+        <svg class="drawing" viewBox="0 0 250 240">
+          <ellipse cx="125" cy="222" rx="72" ry="9" fill="rgba(34,29,22,.12)"/>
+          <path class="body" d="M55 216 L55 148 Q55 56 125 56 Q195 56 195 148 L195 216 Q125 232 55 216 Z"/>
+          <path class="light" d="M63 146 Q63 65 125 65 Q187 65 187 146"/>
+          <circle class="snsr" cx="100" cy="128" r="3"/><circle class="snsr" cx="150" cy="128" r="3"/>
+          <line class="cl" x1="100" y1="128" x2="30" y2="104"/><text x="28" y="100">远场麦克风 ×2</text>
+          <rect x="106" y="158" width="38" height="20" rx="4" fill="none" stroke="#8E7BD8" stroke-width=".9"/>
+          <line class="cl" x1="125" y1="178" x2="36" y2="196"/><text x="34" y="210">毫米波雷达窗</text>
+          <rect class="warm" x="60" y="200" width="17" height="6" rx="2" opacity=".85"/>
+          <line class="cl" x1="68" y1="200" x2="196" y2="188"/><text x="198" y="186">麦克风物理静音拨杆</text>
+          <rect x="176" y="200" width="15" height="7" rx="2" fill="none" stroke="#A39A89"/>
+          <line class="cl" x1="183" y1="200" x2="214" y2="214"/><text x="216" y="222">USB-C</text>
+          <line class="cl" x1="187" y1="100" x2="222" y2="84"/><text x="224" y="80">顶部触控环</text>
+        </svg>
+        <div class="vc">侧 视</div>
+        <div class="vs">全部传感器隐藏于织物下<br>背面：静音拨杆 + USB-C</div>
+      </div>
+      <div class="view">
+        <svg class="drawing" viewBox="0 0 250 240">
+          <circle class="body" cx="125" cy="118" r="92"/>
+          <circle cx="125" cy="118" r="92" fill="none" stroke="#C96F4A" stroke-width="4" opacity=".9"/>
+          <circle cx="125" cy="118" r="60" fill="none" stroke="#A79E8B" stroke-width="1" stroke-dasharray="3 4"/>
+          <circle class="warm" cx="125" cy="118" r="7"/>
+          <circle class="snsr" cx="125" cy="68" r="3.4"/><circle class="snsr" cx="175" cy="118" r="3.4"/>
+          <circle class="snsr" cx="125" cy="168" r="3.4"/><circle class="snsr" cx="75" cy="118" r="3.4"/>
+          <line class="cl" x1="125" y1="68" x2="196" y2="48"/><text x="198" y="46">麦克风阵列 ×4</text>
+          <line class="cl" x1="183" y1="125" x2="216" y2="148"/><text x="150" y="196">触控环 · 滑动调音量</text>
+          <line class="cl" x1="118" y1="112" x2="52" y2="56"/><text x="30" y="50">轻拍 · 晚安</text>
+          <line class="cl" x1="66" y1="128" x2="28" y2="152"/><text x="24" y="168">捂住顶部 2s · 熄灯静音</text>
+        </svg>
+        <div class="vc">顶 视</div>
+        <div class="vs">全部交互靠触摸与语音<br>半夜盲操作设计</div>
+      </div>
+      <div class="view">
+        <svg class="drawing" viewBox="0 0 250 240">
+          <path class="body2" d="M40 200 Q40 90 125 90 Q210 90 210 200 L210 208 Q125 224 40 208 Z"/>
+          <path class="body" d="M60 200 Q60 108 125 108 Q190 108 190 200 L190 206 Q125 218 60 206 Z"/>
+          <path class="light" d="M67 198 Q67 116 125 116 Q183 116 183 198" opacity=".9"/>
+          <line class="cl" x1="183" y1="150" x2="222" y2="130"/><text x="224" y="126">灯环点亮区</text>
+          <line class="cl" x1="125" y1="190" x2="125" y2="232"/><text x="98" y="240" font-size="9">⌀120mm</text>
+          <line class="cl" x1="42" y1="150" x2="24" y2="120"/><text x="8" y="114">出声孔 · 底部反射</text>
+          <circle class="snsr" cx="125" cy="150" r="3.4"/>
+          <line class="cl" x1="128" y1="148" x2="180" y2="60"/><text x="182" y="56">雷达朝向床面 45°</text>
+        </svg>
+        <div class="vc">剖 视</div>
+        <div class="vs">扬声器向下出声经桌面反射<br>雷达朝向床面，非接触监测</div>
+      </div>
+    </div>
+
+    <table class="spec">
+      <tr><th>型号 / 尺寸</th><td>眠屿 S1 · ⌀120 × 86mm · 约 480g · 床头插电（USB-C）</td></tr>
+      <tr><th>感知</th><td><b>60GHz 毫米波雷达</b>（呼吸率 / 体动 / 在离床，穿被可测）· 4 麦远场阵列（鼾声 / 梦话 / 环境噪音）· 温湿度 · 环境光 · <b>无摄像头</b></td></tr>
+      <tr><th>执行</th><td>环形柔光灯 RGBW 1800–4000K（日落 / 日出算法）· 1.75″ 全频 + 无源辐射器（夜间限幅 65dB）· 五层实时音景混音</td></tr>
+      <tr><th>算力 / 系统</th><td>端侧 NPU 跑睡眠分期（目标 κ ≥ 0.70）· <b>openvela</b> · 数据本地闭环，仅匿名周报（可关）</td></tr>
+      <tr><th>生态</th><td>接入<b>米家</b>：编排灯光 / 窗帘 / 空调 / 8H 床垫 / 手环数据 —— 不做单品，做睡眠大脑</td></tr>
+      <tr><th>成本 / 定价</th><td>BOM ≈ ¥220 · 售价 <b>¥599–799</b> · 订阅 ¥15/月（音景库 + 深度报告 + Agent 话术）</td></tr>
+    </table>
+  </section>
+  <!-- ============ 02 Agent 架构 ============ -->
+  <section>
+    <div class="sec-head"><span class="no">02</span><h2>Agent 架构</h2><span class="en">SENSE · THINK · ACT · MEMORY</span></div>
+    <p class="sec-sub">每 3 秒一轮闭环，整夜值守。V1 规则引擎（六条核心规则已在模拟器全链路验证）→ V2 端侧模型 → V3 云端大模型话术。</p>
+    <div class="arch">
+      <div class="flow">
+        <div class="layer">
+          <div class="lt"><span class="n">壹</span><span class="t">感知层</span><span class="e">SENSE</span></div>
+          <div class="chipset">
+            <span class="chip hot">毫米波雷达 · 呼吸 / 体动 / 离床</span>
+            <span class="chip hot">麦克风 · 鼾声 / 梦话 / 噪音</span>
+            <span class="chip">温湿度 · 环境光</span>
+            <span class="chip">米家手环睡眠数据</span>
+          </div>
+        </div>
+        <div class="farrow"><i></i><span>每 3 秒</span></div>
+        <div class="layer">
+          <div class="lt"><span class="n">贰</span><span class="t">决策层</span><span class="e">THINK</span></div>
+          <div class="chipset">
+            <span class="chip hot">睡眠分期 · 清醒 / 浅睡 / 深睡 / REM</span>
+            <span class="chip hot">六条核心规则 · 遮蔽 / 掩鼾 / 闪避 / 换挡 / 渐弱 / 夜醒</span>
+            <span class="chip">整晚渐弱计划器</span>
+            <span class="chip">晨间浅睡唤醒窗口</span>
+          </div>
+        </div>
+        <div class="farrow"><i></i><span>平滑推子</span></div>
+        <div class="layer">
+          <div class="lt"><span class="n">叁</span><span class="t">执行层</span><span class="e">ACT</span></div>
+          <div class="chipset">
+            <span class="chip hot">五层音景混音台</span>
+            <span class="chip hot">环形灯 · 日落 / 呼吸 / 日出</span>
+            <span class="chip">TTS 哄睡话术</span>
+            <span class="chip">米家编排 · 窗帘 / 空调 / 床垫 / 起夜灯</span>
+          </div>
+        </div>
+      </div>
+      <div class="membox">
+        <div class="mt">肆 · 记忆层</div>
+        <p>个人睡眠基线：入睡潜伏期、易醒时段、音景偏好，每晚更新。<br><br>
+          每晚 A/B 微调：雨声 vs 海浪，哪个让你呼吸降得更快。<br><br>
+          周期识别：「周四你总是难入睡」→ 日落自动提前 15 分钟。</p>
+        <div class="hl">越用越懂你 —— 这是竞品最难复制的护城河</div>
+      </div>
+    </div>
+    <div class="loopnote">闭环自检 · 执行改变环境 → 传感器下一轮读到变化 → 校准（自己放的音景吵到你了，它会自己降下去）</div>
+  </section>
+
+  <!-- ============ 03 时间轴 ============ -->
+  <section>
+    <div class="sec-head"><span class="no">03</span><h2>整晚编排</h2><span class="en">ONE NIGHT TIMELINE</span></div>
+    <p class="sec-sub">每个时段有明确的编排目标，括号内为米家设备联动。</p>
+    <div class="tl">
+      <div class="tl-bar">
+        <div class="tl-seg" style="flex:9;background:#8A5A44"><b>21:30 日落陪伴</b><span>暖光渐暗 + 雨声淡入（关大灯 · 合窗帘 · 勿扰）</span></div>
+        <div class="tl-seg" style="flex:5;background:#5E5078"><b>入睡护航</b><span>音景随呼吸放缓</span></div>
+        <div class="tl-seg" style="flex:8;background:#3C4266"><b>深睡守护</b><span>渐弱至静默（空调 24.5°）</span></div>
+        <div class="tl-seg" style="flex:6;background:#4A3A5E"><b>夜醒哨兵</b><span>耳语陪护 · 起夜微光</span></div>
+        <div class="tl-seg" style="flex:6;background:#A06A48"><b>日出唤醒</b><span>浅睡窗口 · 鸟鸣（窗帘开缝）</span></div>
+        <div class="tl-seg" style="flex:4;background:#6E7B5E"><b>晨间报告</b><span>语音播报昨夜</span></div>
+      </div>
+      <div class="tl-hours"><span>21:00</span><span>23:00</span><span>01:00</span><span>03:00</span><span>05:00</span><span>07:00</span><span>08:00</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 04 状态机 ============ -->
+  <section>
+    <div class="sec-head"><span class="no">04</span><h2>状态机</h2><span class="en">STATE MACHINE</span></div>
+    <p class="sec-sub">与模拟器代码中的状态一一对应；异常路径（夜醒）有独立回路。</p>
+    <div class="fsm">
+      <span class="st">待机 IDLE</span><span class="ar">→</span>
+      <span class="st warm">日落陪伴</span><span class="ar">→</span>
+      <span class="st core">入睡护航</span><span class="ar">→</span>
+      <span class="st core">深睡守护</span><span class="ar">⇄</span>
+      <span class="st core">REM 掩蔽</span><span class="ar">→</span>
+      <span class="st warm">日出唤醒</span><span class="ar">→</span>
+      <span class="st">晨间报告</span><span class="ar">↺</span>
+      <span class="st">待机</span>
+    </div>
+    <div class="fsm" style="margin-top:10px">
+      <span class="st alert">夜醒陪护 NIGHT_CARE</span>
+      <span style="color:var(--ink3);font-size:10.5px;letter-spacing:1px">任意睡眠态可切入 · 10 分钟无响应自动回落 · 重新入睡后回到守护态</span>
+    </div>
+  </section>
+
+  <!-- ============ 05 剧本 ============ -->
+  <section>
+    <div class="sec-head"><span class="no">05</span><h2>关键交互剧本</h2><span class="en">SCRIPTS</span></div>
+    <p class="sec-sub">话术原则：慢（0.82× 语速）、短（≤20 字）、暖；深夜一律耳语音量。</p>
+    <div class="scripts">
+      <div class="script">
+        <div class="st-t"><span class="n">甲</span><span class="t">入睡 · 常规路径</span></div>
+        <div class="msg usr"><span class="who">用户</span><span class="bub">"晚安。"</span></div>
+        <div class="msg dev"><span class="who">眠屿</span><span class="bub">"晚安。我为你把灯光调成日落，放一点雨声。今晚由我值守，安心睡吧。"</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 日落灯效 8 分钟 · 雨夜木屋淡入 · 空调联动 —</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 22 分钟后呼吸 8.6 次/分、进入浅睡 → 启动 20 分钟渐弱 —</span></div>
+      </div>
+      <div class="script">
+        <div class="st-t"><span class="n">乙</span><span class="t">夜醒 · 差异化时刻</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 03:12 呼吸率回升 + 连续体动 → 判定夜醒 —</span></div>
+        <div class="msg dev"><span class="who">眠屿</span><span class="bub">（耳语）"我在。别急着看手机，深呼吸几次。我给你留了一点很轻的雨声。"</span></div>
+        <div class="msg usr"><span class="who">用户</span><span class="bub">"几点了？"</span></div>
+        <div class="msg dev"><span class="who">眠屿</span><span class="bub">"还早，才三点。再睡一会儿，我叫你。"</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 故意不报精确时间，减少睡眠焦虑 —</span></div>
+      </div>
+      <div class="script">
+        <div class="st-t"><span class="n">丙</span><span class="t">雷雨 · Agent 应变</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 02:40 雷声，环境噪音 58dB —</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 3 秒内遮蔽层推至 32%，雷声被掩蔽；你在深睡中无感知 —</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 噪音消退后 5 分钟，遮蔽层缓慢收回 —</span></div>
+        <div class="msg dev"><span class="who">眠屿</span><span class="bub">（晨间报告）"……昨晚有雷雨，我为你挡住了 3 次噪音干扰。"</span></div>
+      </div>
+      <div class="script">
+        <div class="st-t"><span class="n">丁</span><span class="t">晨间 · 价值兑现</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 06:40 检测到浅睡窗口 → 提前启动日出 —</span></div>
+        <div class="msg dev"><span class="who">眠屿</span><span class="bub">"早上好。昨晚你 23 分钟入睡，深睡占比 31%，翻身 12 次。今天降温，多穿一件。"</span></div>
+        <div class="msg"><span class="who"></span><span class="act">— 日出灯效 + 鸟鸣 · 窗帘开 10% · 手环确认起床后全屋恢复日间 —</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 06 隐私 ============ -->
+  <section>
+    <div class="sec-head"><span class="no">06</span><h2>隐私设计</h2><span class="en">PRIVACY BY HARDWARE</span></div>
+    <p class="sec-sub">卧室设备的生死线。策略：隐私不是合规成本，是营销资产 —— 「数据不出卧室」印在包装盒上。</p>
+    <div class="badges">
+      <div class="badge"><div class="bn">壹</div><b>无摄像头</b><span>物理上不存在。卧室里最敏感的传感器，直接不放。</span></div>
+      <div class="badge"><div class="bn">贰</div><b>物理静音拨杆</b><span>麦克风断电是机械动作，不是软件承诺。</span></div>
+      <div class="badge"><div class="bn">叁</div><b>雷达不出原始数据</b><span>只输出呼吸率等特征值，原始点云端侧销毁。</span></div>
+      <div class="badge"><div class="bn">肆</div><b>整夜本地闭环</b><span>分期与决策全部端侧；云端仅匿名周报，可一键关。</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>SLEEPISLE S1 · HARDWARE PROTOTYPE V1.0</span>
+    <span>配套：<a href="app.html">App 原型</a> · <a href="index.html">模拟器</a> · 设计文档 docx</span>
+  </footer>
+</div>
+</body>
+</html>
