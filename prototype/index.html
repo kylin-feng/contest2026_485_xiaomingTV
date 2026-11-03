@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>眠屿 SleepIsle · 哄睡 Agent 模拟器 v0.2</title>
+<style>
+/* ============ 配色（在这里调） ============ */
+:root{
+  --bg:#0B0C16; --panel:#12152A; --panel2:#191C33; --line:#252A48;
+  --text:#EDE9DF; --dim:#9DA2B8;
+  --warm:#DA9660;   /* 赤陶金 · 日落/暖灯/行动 */
+  --cool:#7C93C4;   /* 感知/信息 */
+  --agent:#8E7BD8;  /* 暮紫 · Agent */
+  --ok:#7FBF9B; --deep:#3b2e6e;
+  --serif:"Songti SC","STSong","Noto Serif SC",serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:radial-gradient(1200px 700px at 30% 0%,#10132A,var(--bg));color:var(--text);
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;padding:20px;display:flex;justify-content:center}
+.app{width:100%;max-width:1180px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:0 4px}
+.topbar h1{font-size:19px;font-weight:600;font-family:var(--serif);letter-spacing:1px}
+.topbar h1 small{color:var(--dim);font-weight:400;font-size:12px;margin-left:8px}
+.grid{display:grid;grid-template-columns:460px 1fr;gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:20px}
+.sect{font-size:12px;color:var(--dim);margin:16px 0 8px;letter-spacing:2px}
+.sect:first-child{margin-top:0}
+
+/* ============ 圆形主控（中间这个圆 = 硬件） ============ */
+.orb-panel{display:flex;flex-direction:column;align-items:center;overflow:hidden}
+.orb-wrap{position:relative;width:420px;height:420px;margin:4px auto 0}
+.rings{position:absolute;inset:0;transform:rotate(-90deg)}
+.rings circle{fill:none;stroke-linecap:round}
+.ring-bg{stroke:#1a2140;stroke-width:6}
+.ring{stroke-width:6;transition:stroke-dashoffset 1s linear}
+#ringSleep{stroke:var(--agent)}
+#ringSound{stroke:var(--warm)}
+.ring-labels{position:absolute;inset:0;pointer-events:none}
+.ring-tag{position:absolute;font-size:10px;color:var(--dim);background:var(--panel);padding:2px 6px;border-radius:8px;border:1px solid var(--line)}
+.orb{position:absolute;left:50%;top:50%;width:240px;height:240px;border-radius:50%;transform:translate(-50%,-50%);
+  background:radial-gradient(circle at 42% 32%,#2a3260,#141a36 70%);
+  box-shadow:inset 0 0 40px rgba(0,0,0,.5),0 0 0 1px #2a3260;
+  transition:background 1.5s ease,box-shadow 1.5s ease;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.orb::after{content:'';position:absolute;inset:-14px;border-radius:50%;border:1px dashed #2a3260;opacity:.5;animation:spin 60s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* 灯的五种状态 */
+.orb.idle{background:radial-gradient(circle at 42% 32%,#2a3260,#141a36 70%)}
+.orb.sunset{background:radial-gradient(circle at 45% 35%,#ffd9a0,#D97B4A 55%,#6e3d1a);
+  box-shadow:0 0 110px 30px rgba(217,123,74,.35),inset 0 0 40px rgba(120,60,0,.4)}
+.orb.sleep{background:radial-gradient(circle at 45% 35%,#241d4d,#0d0a22 75%);
+  box-shadow:0 0 60px 10px rgba(176,126,240,.12),inset 0 0 60px rgba(0,0,0,.7)}
+.orb.sleep::after{animation-duration:14s;opacity:.8;border-color:#4a3d80}
+.orb.sunrise{background:radial-gradient(circle at 45% 35%,#fff3d6,#ffb35e 60%,#b34a12);
+  box-shadow:0 0 130px 40px rgba(255,179,94,.4)}
+.orb.breathe{animation:breath 8s ease-in-out infinite}
+@keyframes breath{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.06)}}
+.orb-inner{text-align:center;position:relative;z-index:2}
+.orb-mode{font-size:16px;font-weight:600;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.5);font-family:var(--serif);letter-spacing:2px}
+.orb-mic{margin:12px auto 8px;width:56px;height:56px;border-radius:50%;border:1px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.12);color:#fff;font-size:22px;cursor:pointer;transition:all .2s;backdrop-filter:blur(4px)}
+.orb-mic:hover{background:rgba(255,255,255,.25);transform:scale(1.08)}
+.orb-mic.rec{background:#c0392b;border-color:#ff8a7a;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.55}}
+.orb-hint{font-size:11px;color:rgba(255,255,255,.65);min-height:14px;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+/* 环绕的音景层 chip（Agent 混音可视化） */
+.orbit-chip{position:absolute;left:50%;top:50%;width:64px;margin-left:-32px;margin-top:-13px;text-align:center;
+  font-size:11px;padding:5px 0;border-radius:12px;background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+  transition:all .6s;z-index:3}
+.orbit-chip .bar{height:3px;border-radius:2px;background:#2a3260;margin:4px 8px 0;overflow:hidden}
+.orbit-chip .bar i{display:block;height:100%;width:0%;background:var(--warm);transition:width .8s}
+.orbit-chip.on{color:var(--text);border-color:var(--warm);box-shadow:0 0 12px rgba(217,123,74,.25)}
+.orb-sub{margin-top:14px;font-size:12px;color:var(--dim);text-align:center;line-height:1.8}
+.orb-sub b{color:var(--cool);font-weight:500}
+
+/* ============ Agent 驾驶舱 ============ */
+.agent-head{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600}
+.agent-dot{width:10px;height:10px;border-radius:50%;background:#555;transition:all .5s}
+.agent-dot.on{background:var(--agent);box-shadow:0 0 10px var(--agent);animation:pulse 2.4s infinite}
+.agent-head .tag{font-size:10px;color:var(--agent);border:1px solid var(--agent);border-radius:8px;padding:2px 8px;font-weight:400}
+.switch{margin-left:auto;position:relative;width:46px;height:24px}
+.switch input{opacity:0;width:100%;height:100%;position:absolute;cursor:pointer;z-index:2;margin:0}
+.switch span{position:absolute;inset:0;background:#2a3260;border-radius:12px;transition:.3s}
+.switch span::after{content:'';position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#8a8fa8;transition:.3s}
+.switch input:checked+span{background:var(--agent)}
+.switch input:checked+span::after{left:25px;background:#fff}
+.sense-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.sense{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.sense .k{font-size:10px;color:var(--dim);letter-spacing:1px}
+.sense .v{font-size:15px;color:var(--cool);margin-top:3px;font-variant-numeric:tabular-nums}
+.sense .v.hot{color:var(--warm)}
+.sense .v.ag{color:var(--agent)}
+/* 思考流 */
+.think-box{margin-top:12px;height:150px;overflow-y:auto;background:#0b0f22;border:1px solid var(--line);
+  border-radius:14px;padding:10px 12px;font-size:12px;line-height:1.9}
+.think-box .th{border-left:2px solid var(--agent);padding-left:8px;margin-bottom:6px;color:#cfc6e8}
+.think-box .th i{color:var(--dim);font-style:normal;margin-right:6px}
+.think-box .th.act{border-left-color:var(--warm);color:#e8d9c6}
+.think-box .th.sense{border-left-color:var(--cool);color:#c6d4e8}
+/* 干扰注入 */
+.inject-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+/* 音景混合条 */
+.mixrow{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);margin-top:6px}
+.mixrow .bar{flex:1;height:6px;background:#0b0f22;border-radius:3px;overflow:hidden}
+.mixrow .bar i{display:block;height:100%;width:0%;transition:width .8s;border-radius:3px}
+
+/* ============ 通用控件 ============ */
+.log{height:140px;overflow-y:auto;background:#0b0f22;border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:13px;line-height:1.8}
+.log .u{color:var(--cool)} .log .sys{color:var(--dim);font-style:italic}
+.cmd-row{display:flex;gap:8px;margin-top:10px}
+.cmd-row input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--text);font-size:14px;outline:none}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-size:12px;letter-spacing:1px;cursor:pointer;transition:all .2s}
+button:hover{border-color:var(--warm);color:var(--warm)}
+button.primary{background:var(--warm);color:#1a1208;border:none;font-weight:600}
+button.primary:hover{filter:brightness(1.1);color:#1a1208}
+button.agent-btn{border-color:var(--agent);color:var(--agent)}
+button.agent-btn:hover{background:var(--agent);color:#fff}
+button.active{background:var(--warm);color:#1a1208;border-color:var(--warm)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.bottom{margin-top:18px}
+input[type=range]{flex:1;accent-color:var(--warm)}
+input[type=time]{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px;color:var(--text)}
+.slider-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim)}
+
+/* ============ 全屏灯光覆盖层 ============ */
+.overlay{position:fixed;inset:0;z-index:50;pointer-events:none;opacity:0;transition:opacity 1s}
+#sunsetOv{background:linear-gradient(180deg,#2b1a3e,#c1440e 60%,#D97B4A)}
+#darkOv{background:#000}
+#sunriseOv{background:linear-gradient(180deg,#1a2a52,#f07830 70%,#ffd9a0)}
+.breath-ui{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,8,18,.94)}
+.breath-circle{width:160px;height:160px;border-radius:50%;background:radial-gradient(circle,#ffd9a0,#D97B4A);box-shadow:0 0 80px 20px rgba(217,123,74,.4)}
+.breath-text{margin-top:36px;font-size:22px}
+.breath-count{margin-top:8px;font-size:13px;color:var(--dim)}
+.breath-ui .close{position:absolute;top:24px;right:28px}
+@media(max-width:920px){.grid{grid-template-columns:1fr}.orb-wrap{transform:scale(.85);margin-top:-30px;margin-bottom:-30px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h1>眠屿 SleepIsle <small>哄睡 Agent · 软件模拟器 v0.2（先软件验证，再固化硬件）</small></h1>
+    <div class="chips">
+      <button onclick="location.href='home.html'">套件首页</button>
+      <button onclick="location.href='app.html'" style="border-color:var(--agent);color:var(--agent)">App 原型</button>
+      <button onclick="location.href='prototype.html'" style="border-color:var(--cool);color:var(--cool)">硬件原型/文档</button>
+      <button id="speedBtn">加速 ×10（关）</button>
+      <button id="resetBtn">重置</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- ===== 左：圆形主控（硬件本体） ===== -->
+    <div class="panel orb-panel">
+      <div class="orb-wrap">
+        <svg class="rings" viewBox="0 0 420 420">
+          <circle class="ring-bg" cx="210" cy="210" r="200"/>
+          <circle class="ring" id="ringSleep" cx="210" cy="210" r="200"/>
+          <circle class="ring-bg" cx="210" cy="210" r="186"/>
+          <circle class="ring" id="ringSound" cx="210" cy="210" r="186"/>
+        </svg>
+        <div class="ring-labels">
+          <div class="ring-tag" style="left:50%;top:-2px;transform:translateX(-50%)">睡眠深度</div>
+          <div class="ring-tag" style="left:50%;bottom:-2px;transform:translateX(-50%)">音景能量</div>
+        </div>
+        <!-- 环绕音景层：Agent 的混音台 -->
+        <div class="orbit-chip" data-l="tex"    style="transform:rotate(0deg)    translate(168px) rotate(0deg)">场景<div class="bar"><i></i></div></div>
+        <div class="orbit-chip" data-l="base"   style="transform:rotate(60deg)   translate(168px) rotate(-60deg)">底噪<div class="bar"><i></i></div></div>
+        <div class="orbit-chip" data-l="mask"   style="transform:rotate(120deg)  translate(168px) rotate(-120deg)">遮蔽<div class="bar"><i></i></div></div>
+        <div class="orbit-chip" data-l="detail" style="transform:rotate(180deg)  translate(168px) rotate(-180deg)">点缀<div class="bar"><i></i></div></div>
+        <div class="orbit-chip" data-l="birds"  style="transform:rotate(240deg)  translate(168px) rotate(-240deg)">晨鸟<div class="bar"><i></i></div></div>
+        <div class="orbit-chip" data-l="voice"  style="transform:rotate(300deg)  translate(168px) rotate(-300deg)">人声<div class="bar"><i></i></div></div>
+
+        <div class="orb idle" id="orb">
+          <div class="orb-inner">
+            <div class="orb-mode" id="orbMode">待机</div>
+            <button class="orb-mic" id="micBtn" title="语音输入">说</button>
+            <div class="orb-hint" id="orbHint">点中央圆钮，说「晚安」</div>
+          </div>
+        </div>
+      </div>
+      <div class="orb-sub">
+        当前音景配方 <b id="recipeName">—</b> · 唤醒闹钟 <b id="wakeLabel">未设定</b><br>
+        鼾声 <b id="snoreCount">0</b> 次 · 翻身 <b id="turnCount">0</b> 次 · 噪音干扰 <b id="noiseCount">0</b> 次
+      </div>
+    </div>
+
+    <!-- ===== 右：Agent 驾驶舱 ===== -->
+    <div class="panel">
+      <div class="agent-head">
+        <span class="agent-dot on" id="agentDot"></span> 哄睡 Agent
+        <span class="tag" id="agentState">运行中 · 每 3s 感知-决策-执行</span>
+        <label class="switch"><input type="checkbox" id="agentSwitch" checked><span></span></label>
+      </div>
+
+      <div class="sect">感知 SENSE（模拟传感器输入）</div>
+      <div class="sense-grid">
+        <div class="sense"><div class="k">呼吸率</div><div class="v" id="sBreath">14.2 次/分</div></div>
+        <div class="sense"><div class="k">环境噪音</div><div class="v" id="sNoise">32 dB</div></div>
+        <div class="sense"><div class="k">体动</div><div class="v" id="sMove">平静</div></div>
+        <div class="sense"><div class="k">睡眠阶段</div><div class="v ag" id="sStage">清醒</div></div>
+      </div>
+      <div class="mixrow">混音 <div class="bar"><i id="mixBar" style="background:linear-gradient(90deg,var(--warm),var(--agent))"></i></div><span id="mixPct">0%</span></div>
+
+      <div class="sect">思考 THINK → 行动 ACT（Agent 决策流）</div>
+      <div class="think-box" id="thinkBox">
+        <div class="th sense"><i>--:--</i>Agent 待命。开启「一键晚安」后我将接管整晚的音景混音。</div>
+      </div>
+
+      <div class="sect">干扰注入（测试 Agent 应变能力）</div>
+      <div class="inject-row">
+        <button class="agent-btn" data-ev="car">窗外鸣笛</button>
+        <button class="agent-btn" data-ev="turn">我翻身了</button>
+        <button class="agent-btn" data-ev="snore">开始打鼾</button>
+        <button class="agent-btn" data-ev="wake">半夜醒了</button>
+        <button class="agent-btn" data-ev="sleep">模拟入睡</button>
+      </div>
+
+      <div class="sect">对话</div>
+      <div class="log" id="log"><div class="sys">系统：就绪。语音识别需 Chrome/Edge，也可以打字。</div></div>
+      <div class="cmd-row">
+        <input id="cmdInput" placeholder="试试：晚安 / 雨夜木屋 / 你在想什么 / 音量小一点 / 带我呼吸">
+        <button class="primary" id="sendBtn">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 底：快捷操作 ===== -->
+  <div class="panel bottom">
+    <div class="sect">入睡流程</div>
+    <div class="chips">
+      <button class="primary" id="goodNightBtn">一键晚安（Agent 全程接管）</button>
+      <button id="sunsetBtn">日落模式</button>
+      <button id="breathBtn">4-7-8 呼吸</button>
+      <button id="storyBtn">睡前故事</button>
+      <button id="medBtn">冥想引导</button>
+    </div>
+    <div class="sect">音景配方（Agent 生成式混音，非循环录音）</div>
+    <div class="chips" id="recipeChips">
+      <button data-r="cabin">雨夜木屋</button>
+      <button data-r="seaside">海边小屋</button>
+      <button data-r="forest">林间篝火</button>
+      <button data-r="plain">纯底噪</button>
+      <button data-r="stop">停止</button>
+    </div>
+    <div class="sect">晨间</div>
+    <div class="chips" style="align-items:center">
+      <input type="time" id="wakeTime" value="07:00">
+      <button id="wakeSetBtn">设定日出唤醒</button>
+      <button id="wakeNowBtn">立即演示唤醒 + 睡眠报告</button>
+      <span class="slider-row" style="flex:1;max-width:280px">音量 <input type="range" id="vol" min="0" max="100" value="45"> <span id="volText">45%</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="sunsetOv"></div>
+<div class="overlay" id="darkOv"></div>
+<div class="overlay" id="sunriseOv"></div>
+<div class="breath-ui" id="breathUI">
+  <button class="close" id="breathClose">退出</button>
+  <div class="breath-circle" id="breathCircle"></div>
+  <div class="breath-text" id="breathText">准备</div>
+  <div class="breath-count" id="breathCount"></div>
+</div>
+<script>
+/* ==================================================================
+ * CONFIG —— 产品参数都在这里调，改完刷新即可
+ * ================================================================== */
+const CONFIG = {
+  sunsetMinutes: 8,          // 日落灯光时长
+  breathCycles: 6,
+  breathRatio: [4, 7, 8],
+  voiceRate: 0.82,
+  voicePitch: 0.95,
+  volume: 0.45,
+  fadeInSec: 4,
+  agentTickMs: 3000,         // Agent 感知-决策-执行循环间隔
+  senseTickMs: 1000,         // 传感器模拟刷新
+  autoFadeMinutes: 20,       // Agent 判定入睡后，音景渐弱时长
+  noiseHighDb: 45,           // Agent 判定"环境吵"的阈值
+  noiseCalmDb: 34,           // Agent 判定"环境安静"的阈值
+};
+let demoSpeed = 1;
+const T = s => s * 1000 / demoSpeed;
+
+/* ==================================================================
+ * 状态与工具
+ * ================================================================== */
+const $ = id => document.getElementById(id);
+const state = {
+  timers: [], asleep: false, wakeAt: null,
+  session: { snore:0, turn:0, noise:0, stageLog:[], startAt:null },
+};
+const sim = {  // 模拟人体与环境（未来换成真实传感器数据）
+  breath: 14.2, breathTarget: 14.2,
+  noise: 32, noiseSpikeUntil: 0, noiseSpikeDb: 0,
+  move: 0, snoreUntil: 0, stage: '清醒',
+};
+function later(sec, fn){ const id = setTimeout(fn, T(sec)); state.timers.push(id); return id; }
+function clearTimers(){ state.timers.forEach(clearTimeout); state.timers=[]; }
+function now(){ const d=new Date(); return String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); }
+function log(who, text){
+  const el=document.createElement('div');
+  el.className = who==='我' ? 'u' : (who==='系统' ? 'sys' : '');
+  el.textContent = (who==='系统'?'':who+'：')+text;
+  $('log').appendChild(el); $('log').scrollTop=1e9;
+}
+function setOrb(cls, mode, hint){
+  $('orb').className='orb '+cls;
+  if(mode!==undefined) $('orbMode').textContent=mode;
+  if(hint!==undefined) $('orbHint').textContent=hint;
+}
+function think(kind, text){  // Agent 决策流：sense / think / act
+  const el=document.createElement('div');
+  el.className='th '+(kind==='act'?'act':kind==='sense'?'sense':'');
+  el.innerHTML=`<i>${now()}</i>${{sense:'感知 · ',think:'思考 · ',act:'行动 · '}[kind]||''}${text}`;
+  $('thinkBox').appendChild(el);
+  while($('thinkBox').children.length>40) $('thinkBox').firstChild.remove();
+  $('thinkBox').scrollTop=1e9;
+}
+
+/* ==================================================================
+ * 语音合成（设备的嘴）
+ * ================================================================== */
+let zhVoice=null;
+function pickVoice(){ const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.toLowerCase().startsWith('zh')); if(v) zhVoice=v; }
+speechSynthesis.onvoiceschanged=pickVoice; pickVoice();
+function speak(text){
+  log('设备', text);
+  setChipLevel('voice', 1);
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='zh-CN'; u.rate=CONFIG.voiceRate; u.pitch=CONFIG.voicePitch;
+  if(zhVoice) u.voice=zhVoice;
+  u.onend=()=>setChipLevel('voice',0);
+  speechSynthesis.speak(u);
+}
+
+/* ==================================================================
+ * 分层音景引擎 —— Agent 的混音台
+ * 层：base 底噪 / tex 场景 / mask 遮蔽 / detail 点缀 / birds 晨鸟
+ * 每层独立 gain，Agent 通过 layerTo() 平滑推子
+ * ================================================================== */
+let AC=null, master=null;
+function audio(){
+  if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)();
+    master=AC.createGain(); master.gain.value=CONFIG.volume; master.connect(AC.destination); }
+  if(AC.state==='suspended') AC.resume();
+}
+const NB={};
+function nb(type){  // 噪音Buffer缓存
+  if(NB[type]) return NB[type];
+  const len=AC.sampleRate*2, buf=AC.createBuffer(2,len,AC.sampleRate);
+  for(let c=0;c<2;c++){ const d=buf.getChannelData(c);
+    if(type==='white'){ for(let i=0;i<len;i++) d[i]=Math.random()*2-1; }
+    else if(type==='brown'){ let last=0;
+      for(let i=0;i<len;i++){ last=(last+0.02*(Math.random()*2-1))/1.02; d[i]=last*3.5; } }
+    else { let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for(let i=0;i<len;i++){ const w=Math.random()*2-1;
+        b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.075076; b2=0.969*b2+w*0.153852;
+        b3=0.8665*b3+w*0.3104856;  b4=0.55*b4+w*0.5329522;   b5=-0.7616*b5-w*0.016898;
+        d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11; b6=w*0.115926; } }
+  }
+  return NB[type]=buf;
+}
+function makeLayer(){ const g=AC.createGain(); g.gain.value=0; g.connect(master); return {g, nodes:[], timers:[]}; }
+function clearLayer(L, fadeSec=1){
+  try{ L.g.gain.cancelScheduledValues(AC.currentTime);
+    L.g.gain.setValueAtTime(L.g.gain.value, AC.currentTime);
+    L.g.gain.linearRampToValueAtTime(0, AC.currentTime+fadeSec); }catch(e){}
+  const nodes=L.nodes, timers=L.timers;
+  setTimeout(()=>{ nodes.forEach(n=>{try{n.stop()}catch(e){}}); timers.forEach(clearInterval); }, fadeSec*1000+200);
+  L.nodes=[]; L.timers=[];
+}
+function layerTo(L, v, sec=2.5){  // 平滑推子：Agent 唯一的"手"
+  if(!L) return;
+  const g=L.g.gain;
+  g.cancelScheduledValues(AC.currentTime);
+  g.setValueAtTime(g.value, AC.currentTime);
+  g.linearRampToValueAtTime(Math.max(0,v), AC.currentTime+sec);
+}
+function addNoiseTo(L, type, filters, level){
+  const src=AC.createBufferSource(); src.buffer=nb(type); src.loop=true;
+  let node=src;
+  filters.forEach(f=>{ const fl=AC.createBiquadFilter(); fl.type=f.type; fl.frequency.value=f.frequency; if(f.Q) fl.Q.value=f.Q; node.connect(fl); node=fl; });
+  const ng=AC.createGain(); ng.gain.value=level; node.connect(ng); ng.connect(L.g);
+  src.start(); L.nodes.push(src);
+  return ng;
+}
+function addLFO(L, targetParam, freq, depth){
+  const lfo=AC.createOscillator(), lg=AC.createGain();
+  lfo.frequency.value=freq; lg.gain.value=depth;
+  lfo.connect(lg); lg.connect(targetParam); lfo.start(); L.nodes.push(lfo);
+}
+/* 点缀事件：随机雨滴/柴火噼啪，挂在 detail 层 */
+function startDetail(kind){
+  const L=scape.detail;
+  if(kind==='rain') L.timers.push(setInterval(()=>{ if(Math.random()<0.5){
+    const o=AC.createOscillator(), og=AC.createGain();
+    o.frequency.value=2500+Math.random()*3000; og.gain.setValueAtTime(0.05,AC.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.05);
+    o.connect(og); og.connect(L.g); o.start(); o.stop(AC.currentTime+0.06); } }, 130));
+  if(kind==='fire') L.timers.push(setInterval(()=>{ if(Math.random()<0.4){
+    const src=AC.createBufferSource(); src.buffer=nb('white');
+    const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500+Math.random()*2500; bp.Q.value=2;
+    const cg=AC.createGain(); cg.gain.setValueAtTime(0.22,AC.currentTime);
+    cg.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.08);
+    src.connect(bp); bp.connect(cg); cg.connect(L.g); src.start(); src.stop(AC.currentTime+0.09); } }, 320));
+}
+const scape={ built:false, recipe:null,
+  base:null, tex:null, mask:null, detail:null, birds:null };
+function buildScape(){
+  if(scape.built) return;
+  audio();
+  scape.base=makeLayer(); scape.tex=makeLayer(); scape.mask=makeLayer();
+  scape.detail=makeLayer(); scape.birds=makeLayer();
+  // 遮蔽层：常驻棕噪音，平时静默，环境吵时 Agent 才推起来
+  addNoiseTo(scape.mask,'brown',[{type:'lowpass',frequency:600}],0.9);
+  scape.built=true;
+}
+/* 音景配方 = 各层的目标电平 + 场景构造方式（Agent 可在此基础上微调） */
+const RECIPES={
+  cabin:{   name:'雨夜木屋', build(){ addNoiseTo(scape.tex,'white',[{type:'bandpass',frequency:2000,Q:0.4}],0.55); addNoiseTo(scape.tex,'pink',[{type:'lowpass',frequency:400}],0.25); startDetail('rain'); },
+    levels:{base:0.25,tex:0.7,detail:0.5} },
+  seaside:{ name:'海边小屋', build(){ const g=addNoiseTo(scape.tex,'brown',[{type:'lowpass',frequency:500}],0.9); addLFO(scape.tex,g.gain,0.09,0.4); },
+    levels:{base:0.2,tex:0.85,detail:0} },
+  forest:{  name:'林间篝火', build(){ addNoiseTo(scape.tex,'brown',[{type:'lowpass',frequency:320}],0.6); const w=addNoiseTo(scape.tex,'pink',[{type:'bandpass',frequency:400,Q:1.2}],0.4); addLFO(scape.tex,w.gain,0.06,0.25); startDetail('fire'); },
+    levels:{base:0.2,tex:0.7,detail:0.55} },
+  plain:{   name:'纯底噪',   build(){}, levels:{base:0.7,tex:0,detail:0} },
+};
+function setRecipe(key, byAgent){
+  const r=RECIPES[key]; if(!r) return;
+  buildScape();
+  clearLayer(scape.base); clearLayer(scape.tex); clearLayer(scape.detail);
+  scape.base=makeLayer(); scape.tex=makeLayer(); scape.detail=makeLayer();
+  addNoiseTo(scape.base,'brown',[{type:'lowpass',frequency:350}],0.8);
+  r.build();
+  scape.recipe=key; scape.levels={...r.levels};
+  layerTo(scape.base, r.levels.base, CONFIG.fadeInSec);
+  layerTo(scape.tex,  r.levels.tex,  CONFIG.fadeInSec);
+  layerTo(scape.detail, r.levels.detail, CONFIG.fadeInSec);
+  $('recipeName').textContent=r.name;
+  document.querySelectorAll('#recipeChips button').forEach(b=>b.classList.toggle('active',b.dataset.r===key));
+  updateOrbit();
+  if(!byAgent){ log('系统','播放音景：'+r.name); }
+}
+function stopScape(){
+  if(!scape.built) return;
+  ['base','tex','detail','mask','birds'].forEach(k=>clearLayer(scape[k]));
+  scape.recipe=null; $('recipeName').textContent='—';
+  document.querySelectorAll('#recipeChips button').forEach(b=>b.classList.remove('active'));
+  updateOrbit();
+}
+function setChipLevel(layer, v){  // 环绕 chip 的电平条
+  const chip=document.querySelector(`.orbit-chip[data-l="${layer}"]`);
+  if(!chip) return;
+  chip.classList.toggle('on', v>0.03);
+  chip.querySelector('.bar i').style.width=Math.round(Math.min(1,v)*100)+'%';
+}
+function updateOrbit(){
+  if(!scape.built){ ['tex','base','mask','detail','birds'].forEach(l=>setChipLevel(l,0)); return; }
+  setChipLevel('tex',   scape.tex.g.gain.value);
+  setChipLevel('base',  scape.base.g.gain.value);
+  setChipLevel('mask',  scape.mask.g.gain.value);
+  setChipLevel('detail',scape.detail.g.gain.value);
+  setChipLevel('birds', scape.birds.g.gain.value);
+  const mix=[scape.base,scape.tex,scape.mask,scape.detail].reduce((s,L)=>s+L.g.gain.value,0)/2.4;
+  $('mixBar').style.width=Math.round(Math.min(1,mix)*100)+'%';
+  $('mixPct').textContent=Math.round(Math.min(1,mix)*100)+'%';
+}
+setInterval(updateOrbit, 800);
+</script>
+<script>
+/* ==================================================================
+ * 传感器模拟（未来对接真实毫米波雷达/手环数据，接口不变）
+ * ================================================================== */
+setInterval(()=>{
+  sim.breath += (sim.breathTarget-sim.breath)*0.06 + (Math.random()-0.5)*0.4;
+  const spiking = Date.now()<sim.noiseSpikeUntil;
+  sim.noise = spiking ? sim.noiseSpikeDb+(Math.random()-0.5)*4 : 29+Math.random()*6;
+  sim.move = Math.max(0, sim.move-0.3);
+  $('sBreath').textContent=sim.breath.toFixed(1)+' 次/分';
+  const nEl=$('sNoise'); nEl.textContent=sim.noise.toFixed(0)+' dB';
+  nEl.classList.toggle('hot', sim.noise>CONFIG.noiseHighDb);
+  $('sMove').textContent = sim.move>1.5?'翻身':(sim.move>0.4?'微动':'平静');
+  $('sStage').textContent = Date.now()<sim.snoreUntil ? sim.stage+' · 鼾声' : sim.stage;
+  const depth={清醒:0,浅睡:0.35,深睡:0.85,REM:0.55}[sim.stage]||0;
+  $('ringSleep').style.strokeDasharray='1256.6';
+  $('ringSleep').style.strokeDashoffset=1256.6*(1-depth);
+}, CONFIG.senseTickMs);
+
+/* ==================================================================
+ * 哄睡 Agent —— 感知 SENSE → 思考 THINK → 行动 ACT
+ * 规则引擎 v0.2（未来这一层换成 LLM/端侧模型，接口不变）
+ * ================================================================== */
+let agentOn=true, maskGain=0, fadePlanOn=false, lastStage='清醒', nightWakeHandled=false;
+const STAGE_LEVELS={  // Agent 的混音策略表：不同睡眠阶段 → 各层目标电平
+  清醒:{tex:1.0, detail:1.0, base:1.0},   // 系数 × 配方基准
+  浅睡:{tex:0.7, detail:0.6, base:0.9},
+  深睡:{tex:0.25,detail:0.2, base:0.6},
+  REM:{ tex:0.4, detail:0.3, base:0.8},
+};
+function agentTick(){
+  if(!agentOn) return;
+  const playing = scape.built && scape.recipe;
+  const stage=sim.stage, noise=sim.noise;
+
+  // 规则1：环境噪音遮蔽（吵 → 推遮蔽层，静 → 收回）
+  if(playing){
+    if(noise>CONFIG.noiseHighDb && maskGain<0.5){
+      maskGain=Math.min(0.5,maskGain+0.12);
+      layerTo(scape.mask,maskGain);
+      think('act',`突发噪音 ${noise.toFixed(0)}dB（>阈值${CONFIG.noiseHighDb}）→ 遮蔽层推至 ${(maskGain*100)|0}% 掩蔽它`);
+    } else if(noise<CONFIG.noiseCalmDb && maskGain>0){
+      maskGain=Math.max(0,maskGain-0.05);
+      layerTo(scape.mask,maskGain,5);
+      if(maskGain===0) think('think',`环境恢复安静（${noise.toFixed(0)}dB）→ 遮蔽层完全收回，避免过度填充`);
+    }
+  }
+
+  // 规则2：鼾声 → 轻推遮蔽，不打断
+  if(Date.now()<sim.snoreUntil && playing && maskGain<0.35){
+    maskGain+=0.05; layerTo(scape.mask,maskGain,3);
+    think('act',`检测到鼾声 → 遮蔽层微调 +5%，帮同床人掩蔽（不打扰睡者）`);
+  }
+
+  // 规则3：翻身/体动 → 音景闪避 3 秒，避免声音成为干扰源
+  if(sim.move>1.5 && playing){
+    const L=STAGE_LEVELS[stage];
+    layerTo(scape.tex, scape.levels.tex*L.tex*0.35, 0.6);
+    think('act',`检测到你翻身了 → 场景层瞬间闪避 3 秒，不抢你的注意力`);
+    setTimeout(()=>{ if(scape.recipe) layerTo(scape.tex, scape.levels.tex*(STAGE_LEVELS[sim.stage]||STAGE_LEVELS.清醒).tex, 3); }, 3000);
+    sim.move=0;
+  }
+
+  // 规则4：睡眠阶段切换 → 整体混音策略换挡
+  if(stage!==lastStage){
+    lastStage=stage;
+    think('sense',`睡眠阶段变化 → 【${stage}】`);
+    if(playing){
+      const L=STAGE_LEVELS[stage];
+      layerTo(scape.tex,    scape.levels.tex*L.tex, 6);
+      layerTo(scape.detail, scape.levels.detail*L.detail, 6);
+      layerTo(scape.base,   scape.levels.base*L.base, 6);
+      const plan={浅睡:'你正在入睡，我把场景层降到 70%，减少刺激',
+                  深睡:'深睡期最珍贵 → 场景层降到 25%，只留薄薄底噪守护',
+                  REM:'REM 期易醒 → 适度保留掩蔽，场景维持 40%'}[stage];
+      if(plan) think('act',plan);
+    }
+    // 规则5：判定入睡 → 启动整晚渐弱计划
+    if((stage==='深睡'||stage==='浅睡') && state.asleep && !fadePlanOn){
+      fadePlanOn=true;
+      think('think',`呼吸率 ${sim.breath.toFixed(1)} 次/分且已进入${stage} → 判定入睡，启动 ${CONFIG.autoFadeMinutes} 分钟音景渐弱计划`);
+      const steps=8, iv=setInterval(()=>{
+        if(!scape.recipe){ clearInterval(iv); return; }
+        ['tex','detail','base'].forEach(k=>{ const g=scape[k].g.gain; layerTo(scape[k], g.value*0.72, CONFIG.autoFadeMinutes*60/steps/demoSpeed); });
+        maskGain*=0.72; if(scape.built) layerTo(scape.mask,maskGain,CONFIG.autoFadeMinutes*60/steps/demoSpeed);
+      }, T(CONFIG.autoFadeMinutes*60/steps));
+      state.timers.push(iv);
+      later(CONFIG.autoFadeMinutes+5, ()=>{ if(scape.recipe){ stopScape(); think('act','渐弱完成 → 音景静默，进入纯监测模式'); } });
+    }
+    // 规则6：夜醒响应
+    if(stage==='清醒' && state.asleep && !nightWakeHandled){
+      nightWakeHandled=true;
+      think('sense','呼吸率回升、体动增多 → 判断你半夜醒了');
+      speak('我在。别急着看手机，深呼吸几次。我给你留了一点很轻的雨声，陪你重新入睡。');
+      if(scape.built && scape.recipe){ layerTo(scape.tex, 0.25, 4); layerTo(scape.base, 0.3, 4); }
+      think('act','夜醒陪护 → 音景回升至 25%，灯光保持熄灭（避免蓝光）');
+      later(300, ()=>{ nightWakeHandled=false; });  // 10分钟后重置，允许再次响应
+    }
+  }
+}
+setInterval(agentTick, CONFIG.agentTickMs);
+
+/* ==================================================================
+ * 睡眠进程模拟（未来由真实睡眠分期驱动）
+ * ================================================================== */
+function startSleepCycle(){
+  sim.stage='清醒'; sim.breathTarget=14; lastStage='清醒';
+  const seq=[ [180,'浅睡',11], [420,'深睡',8], [720,'REM',10.5], [960,'浅睡',11], [1260,'深睡',8], [1560,'REM',10.5] ];
+  seq.forEach(([sec,st,br])=>later(sec, ()=>{ if(state.asleep){ sim.stage=st; sim.breathTarget=br; state.session.stageLog.push(st); } }));
+}
+function injectEvent(ev){
+  if(ev==='car'){ sim.noiseSpikeUntil=Date.now()+8000; sim.noiseSpikeDb=58+Math.random()*6; state.session.noise++; $('noiseCount').textContent=state.session.noise; think('sense','注入：窗外汽车鸣笛（噪音脉冲 8 秒）'); }
+  if(ev==='turn'){ sim.move=3; state.session.turn++; $('turnCount').textContent=state.session.turn; think('sense','注入：用户翻身'); }
+  if(ev==='snore'){ sim.snoreUntil=Date.now()+12000; state.session.snore++; $('snoreCount').textContent=state.session.snore; think('sense','注入：打鼾 12 秒'); }
+  if(ev==='wake'){ sim.stage='清醒'; sim.breathTarget=14.5; }
+  if(ev==='sleep'){ if(!state.asleep) goodNight(); else { sim.stage='浅睡'; sim.breathTarget=10; think('sense','注入：直接进入浅睡'); } }
+}
+
+/* ==================================================================
+ * 灯光（圆盘 + 全屏覆盖层）
+ * ================================================================== */
+function sunset(){
+  setOrb('sunset','日落模式',`灯光 ${CONFIG.sunsetMinutes} 分钟内缓缓变暗`);
+  $('sunsetOv').style.opacity=0.5;
+  const steps=CONFIG.sunsetMinutes*60/2; let i=0;
+  const iv=setInterval(()=>{
+    i++; const p=i/steps;
+    $('sunsetOv').style.opacity=Math.max(0,0.5*(1-p));
+    if(p>=1){ clearInterval(iv); $('sunsetOv').style.opacity=0; $('darkOv').style.opacity=1; setOrb('sleep','睡眠守护中','Agent 值守 · 说「唤醒」结束'); }
+  }, T(2));
+  state.timers.push(iv);
+}
+function sunrise(){
+  speechSynthesis.cancel();
+  $('darkOv').style.opacity=0; $('sunriseOv').style.opacity=0;
+  setOrb('sunrise','日出唤醒','');
+  state.asleep=false; sim.stage='清醒'; sim.breathTarget=14; fadePlanOn=false; nightWakeHandled=false;
+  let p=0; const iv=setInterval(()=>{
+    p+=0.04; $('sunriseOv').style.opacity=Math.min(0.65,p);
+    if(p>=0.65){ clearInterval(iv);
+      birdsong();
+      const s=state.session;
+      const deep=s.stageLog.filter(x=>x==='深睡').length, total=Math.max(1,s.stageLog.length);
+      speak(`早上好。昨晚报告：深睡占比约 ${Math.round(deep/total*100)}%，翻身 ${s.turn} 次，打鼾 ${s.snore} 次，我为你挡住了 ${s.noise} 次噪音干扰。新的一天开始了。`);
+      think('act','日出唤醒完成 → 已播报睡眠报告，晨鸟层淡出');
+      setTimeout(()=>{ $('sunriseOv').style.opacity=0; layerTo(scape.birds,0,8); setOrb('idle','待机','点中央圆钮，说「晚安」'); }, T(25));
+    }
+  }, T(1));
+}
+function birdsong(){
+  buildScape();
+  const L=scape.birds; layerTo(L,0.5,3);
+  for(let k=0;k<10;k++){ later(k*1.1+Math.random(), ()=>{
+    const o=AC.createOscillator(), og=AC.createGain();
+    const f=2000+Math.random()*1500; o.frequency.setValueAtTime(f,AC.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f*1.4,AC.currentTime+0.12);
+    og.gain.setValueAtTime(0.07,AC.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.15);
+    o.connect(og); og.connect(L.g); o.start(); o.stop(AC.currentTime+0.16);
+  }); }
+}
+
+/* ==================================================================
+ * 哄睡内容
+ * ================================================================== */
+const STORIES=[
+ '从前有一座很安静的小岛，岛上的灯塔每到夜里就亮起暖暖的光。守灯人有一只猫，猫从不捉老鼠，只负责在窗台上打呼。今晚，海面很平，风很轻，猫打了个哈欠，灯塔的光也慢慢、慢慢地暗了下来……',
+ '夜里的小火车要穿过一片森林。车厢里没有乘客，只有月光。火车开得很慢很慢，怕吵醒树梢上的鸟。你听着车轮的声音，哐当，哐当，像一首很旧很旧的摇篮曲……',
+ '云在天上走了一整天，累了。它找了一座山的肩膀，轻轻靠上去。山说，睡吧，我替你看着星星。于是云变成了薄薄的一层，盖在山顶，像一床被子。'
+];
+const MEDITATION=[
+ ['现在，找到一个舒服的姿势，让身体沉进床里。',4],
+ ['把注意力放在呼吸上，不用改变它，只是看着它。',5],
+ ['吸气的时候，想象夜色慢慢填满房间。',5],
+ ['呼气的时候，把今天剩下的事情，轻轻放到床边。',6],
+ ['它们明天还会在那里。而今晚，你只需要休息。',6],
+ ['很好。继续保持这样的呼吸，让意识慢慢变轻，变软。',8],
+];
+let storyIdx=0;
+function tellStory(){ speak(STORIES[storyIdx++%STORIES.length]); }
+function meditate(){ let t=1; MEDITATION.forEach(([line,sec])=>{ later(t,()=>speak(line)); t+=sec; }); think('act','冥想引导已排入播报队列'); }
+function startBreathing(){
+  const ui=$('breathUI'); ui.style.display='flex';
+  const circle=$('breathCircle'), txt=$('breathText'), cnt=$('breathCount');
+  const [inh,hold,exh]=CONFIG.breathRatio; let t=1;
+  txt.textContent='准备，跟着光圈'; cnt.textContent='';
+  for(let c=0;c<CONFIG.breathCycles;c++){ const n=c;
+    later(t, ()=>{ txt.textContent='吸气'; cnt.textContent=`第 ${n+1}/${CONFIG.breathCycles} 轮`;
+      circle.style.transition=`transform ${T(inh)}ms ease-in-out`; circle.style.transform='scale(1.45)'; });
+    t+=inh;
+    later(t, ()=>{ txt.textContent='屏息'; });
+    t+=hold;
+    later(t, ()=>{ txt.textContent='呼气';
+      circle.style.transition=`transform ${T(exh)}ms ease-in-out`; circle.style.transform='scale(1)'; });
+    t+=exh;
+  }
+  later(t+1, ()=>{ ui.style.display='none'; speak('很好。带着这个节奏，慢慢睡吧。'); });
+}
+
+/* ==================================================================
+ * 一键晚安：Agent 全程接管
+ * ================================================================== */
+function goodNight(){
+  clearTimers(); resetOverlays(); stopScape();
+  state.asleep=true; fadePlanOn=false; nightWakeHandled=false;
+  state.session={snore:0,turn:0,noise:0,stageLog:[],startAt:new Date()};
+  ['snoreCount','turnCount','noiseCount'].forEach(id=>$(id).textContent='0');
+  speak('晚安。我为你把灯光调成日落，放一点雨声。今晚由我值守，安心睡吧。');
+  think('sense','收到「晚安」指令 → 启动入睡编排：日落灯光 + 雨夜木屋音景 + 睡眠监测');
+  sunset();
+  later(2, ()=>{ setRecipe('cabin',true); think('act','音景配方【雨夜木屋】已启动，各层淡入中'); });
+  later(CONFIG.sunsetMinutes*60*0.4, ()=>{ sim.breathTarget=12.5; });
+  later(10, startSleepCycle);
+}
+function resetOverlays(){ ['sunsetOv','darkOv','sunriseOv'].forEach(id=>$(id).style.opacity=0); }
+
+/* ==================================================================
+ * 指令解析（耳朵和嘴）
+ * ================================================================== */
+function handleCommand(raw){
+  const t=raw.trim(); if(!t) return;
+  log('我', t);
+  if(/晚安|要睡|睡觉去|入睡/.test(t)) goodNight();
+  else if(/雨夜|木屋|雨/.test(t)) setRecipe('cabin');
+  else if(/海浪|海边|大海/.test(t)) setRecipe('seaside');
+  else if(/篝火|森林|林间|壁炉/.test(t)) setRecipe('forest');
+  else if(/底噪|白噪音|纯噪音/.test(t)) setRecipe('plain');
+  else if(/停止|安静|关掉|别放/.test(t)){ stopScape(); speak('好，安静了。'); }
+  else if(/故事/.test(t)) tellStory();
+  else if(/冥想/.test(t)) meditate();
+  else if(/呼吸|放松|紧张|焦虑/.test(t)) startBreathing();
+  else if(/日落/.test(t)) sunset();
+  else if(/唤醒|起床|早上好|日出/.test(t)) sunrise();
+  else if(/在想什么|怎么想|决策/.test(t)){
+    const ths=[...$('thinkBox').children].slice(-3).map(e=>e.textContent.replace(/^[\d:]+/,''));
+    speak(ths.length? '我最近在思考这些：'+ths.join('。') : '我现在头脑空白，等你入睡后我就开始工作了。');
+  }
+  else if(/智能|agent|代理/i.test(t)){
+    $('agentSwitch').checked=!$('agentSwitch').checked; $('agentSwitch').onchange();
+    speak(agentOn?'智能模式已开启，我会根据你的状态实时调音。':'智能模式已关闭，音景保持当前状态不变。');
+  }
+  else if(/音量小/.test(t)) setVol(CONFIG.volume-0.15);
+  else if(/音量大/.test(t)) setVol(CONFIG.volume+0.15);
+  else if(/你是谁|能做什么/.test(t)) speak('我是眠屿，一个哄睡 Agent。我不是简单的白噪音播放器——我会整夜感知你的呼吸、翻身和环境噪音，实时混音：你入睡我就渐弱，有噪音我就遮蔽，你夜醒我轻声陪护，清晨用日出和鸟鸣叫你起床。');
+  else speak('我还在学习这句话。可以说：晚安、雨夜木屋、你在想什么、带我呼吸、日出唤醒。');
+}
+function setVol(v){
+  CONFIG.volume=Math.max(0,Math.min(1,v));
+  if(master) master.gain.value=CONFIG.volume;
+  $('vol').value=CONFIG.volume*100; $('volText').textContent=Math.round(CONFIG.volume*100)+'%';
+}
+
+/* ==================================================================
+ * 事件绑定
+ * ================================================================== */
+$('sendBtn').onclick=()=>{ handleCommand($('cmdInput').value); $('cmdInput').value=''; };
+$('cmdInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ handleCommand(e.target.value); e.target.value=''; } });
+document.querySelectorAll('#recipeChips button').forEach(b=>b.onclick=()=>b.dataset.r==='stop'?(stopScape(),log('系统','音景已停止')):setRecipe(b.dataset.r));
+document.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>injectEvent(b.dataset.ev));
+$('vol').oninput=e=>setVol(e.target.value/100);
+$('goodNightBtn').onclick=goodNight;
+$('sunsetBtn').onclick=sunset;
+$('breathBtn').onclick=startBreathing;
+$('breathClose').onclick=()=>{ $('breathUI').style.display='none'; };
+$('storyBtn').onclick=tellStory;
+$('medBtn').onclick=meditate;
+$('wakeSetBtn').onclick=()=>{
+  const v=$('wakeTime').value; if(!v) return;
+  const [h,mi]=v.split(':').map(Number); const nowD=new Date(); const at=new Date(nowD);
+  at.setHours(h,mi,0,0); if(at<=nowD) at.setDate(at.getDate()+1);
+  state.wakeAt=at; later(Math.max(0,(at-nowD)/1000), sunrise);
+  $('wakeLabel').textContent=v;
+  log('系统',`日出唤醒已设定：${v}（加速模式下会提前触发）`);
+  think('think',`唤醒闹钟设定 ${v} → 我会在日出前 20 分钟开始浅睡检测，挑最浅的时机叫你`);
+};
+$('wakeNowBtn').onclick=sunrise;
+$('speedBtn').onclick=()=>{
+  demoSpeed=demoSpeed===1?10:1;
+  $('speedBtn').textContent=`加速 ×10（${demoSpeed===10?'开':'关'}）`;
+  log('系统',demoSpeed===10?'演示模式：新计时 ×10 加速':'恢复正常速度');
+};
+$('resetBtn').onclick=()=>{
+  clearTimers(); stopScape(); speechSynthesis.cancel(); resetOverlays();
+  state.asleep=false; fadePlanOn=false; nightWakeHandled=false; maskGain=0;
+  sim.stage='清醒'; sim.breathTarget=14.2; sim.noiseSpikeUntil=0; sim.snoreUntil=0;
+  setOrb('idle','待机','点中央圆钮，说「晚安」'); $('recipeName').textContent='—'; $('wakeLabel').textContent='未设定';
+  log('系统','已重置'); think('think','系统重置，Agent 重新待命');
+};
+$('agentSwitch').onchange=e=>{
+  agentOn=e.target.checked;
+  $('agentDot').classList.toggle('on',agentOn);
+  $('agentState').textContent=agentOn?'运行中 · 每 3s 感知-决策-执行':'已挂起 · 音景保持手动';
+  think('think',agentOn?'Agent 已接管混音台':'Agent 已挂起，各层保持当前电平');
+};
+$('orb').onclick=()=>{ if(!state.asleep) $('micBtn').click(); };
+
+/* 语音识别（Chrome/Edge，需联网） */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){
+  const rec=new SR(); rec.lang='zh-CN'; rec.interimResults=false;
+  rec.onresult=e=>handleCommand(e.results[0][0].transcript);
+  rec.onend=()=>$('micBtn').classList.remove('rec');
+  rec.onerror=()=>{ $('micBtn').classList.remove('rec'); log('系统','语音识别不可用，请打字输入'); };
+  $('micBtn').onclick=e=>{ e.stopPropagation(); try{ rec.start(); $('micBtn').classList.add('rec'); }catch(err){} };
+}else{
+  $('micBtn').disabled=true; $('micBtn').title='当前浏览器不支持语音识别';
+  log('系统','提示：建议用 Chrome 打开以获得语音体验。');
+}
+/* 光环刻度初始化 */
+['ringSleep','ringSound'].forEach((id,i)=>{
+  const r=id==='ringSleep'?200:186, C=2*Math.PI*r;
+  $(id).style.strokeDasharray=C; $(id).style.strokeDashoffset=C;
+});
+setInterval(()=>{ const C=2*Math.PI*186;
+  const pct=parseInt($('mixPct').textContent)/100||0;
+  $('ringSound').style.strokeDashoffset=C*(1-pct);
+},900);
+</script>
+</body>
+</html>
