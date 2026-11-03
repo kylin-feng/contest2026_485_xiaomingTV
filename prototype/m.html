@@ -1112,7 +1112,19 @@ function demoTour(){
   feed(nowHM(),'演示速览启动 · 一整夜压进 25 秒');
   petSay('看好了，一整夜演一遍给你看', false);
   speak('演示速览。一整夜，二十五秒。');
-  sunset(); setRecipe('cabin');
+  /* 快速日落：真实流程是 8 分钟渐暗，速览里 3 秒走完，
+     否则到「深睡」时屏幕还蒙着落日色、宠物也没睡下，夜景进不来 */
+  setOrb('warm','陪伴','日落进行中','灯光渐暗 · 雨声淡入');
+  $('ovSunset').style.opacity=.5;
+  /* 真实流程夜里是纯黑熄屏；速览压暗到 .42，让评委看得见阶段在变 */
+  let sp=0;
+  const siv=setInterval(()=>{
+    sp+=.12; $('ovSunset').style.opacity=Math.max(0,.5*(1-sp));
+    if(sp>=1){ clearInterval(siv); $('ovSunset').style.opacity=0; $('ovDark').style.opacity=.42;
+      setOrb('night','守护','睡眠守护中','点圆盘可叫我'); $('orbCore').classList.add('breathing'); petSleep(); setScene('night'); }
+  }, 300);
+  state.timers.push(siv);
+  setRecipe('cabin');
   tourLater(3, ()=>{ sim.stage='浅睡'; sim.breathTarget=11; state.session.stages.push(['浅睡',Date.now()]); feed(nowHM(),'入睡 → 浅睡 · 呼吸放缓'); });
   tourLater(7, ()=>{ sim.stage='深睡'; sim.breathTarget=8;  state.session.stages.push(['深睡',Date.now()]); feed(nowHM(),'深睡 · 场景层降至 25%'); });
   tourLater(9, ()=>{ state.session.masked++; feed(nowHM(),'环境噪音 52dB → 遮蔽层推至 32%'); });
