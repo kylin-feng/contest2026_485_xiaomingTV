@@ -31,3 +31,7 @@ recordings/
 tools/backup/
 tools/sftool/
 tools/sftool-*.zip
+
+# serve-https.py 自动生成的自签证书（私钥不入库）
+prototype/sle-cert.pem
+prototype/sle-key.pem

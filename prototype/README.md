@@ -28,12 +28,13 @@ localStorage，本地起个 HTTP 服务就能用——目的是**方便塞进任
 
 ```bash
 cd prototype
-python3 -m http.server 8200 --bind 0.0.0.0
+python3 -m http.server 8200 --bind 0.0.0.0     # Windows 本机：py -m http.server 8200
 # 电脑访问 http://localhost:8200/m.html
 
 # 手机语音聊天必须 HTTPS（浏览器在非安全上下文禁用麦克风）：
-# 先生成自签证书（IP 换成局域网 IP），再 python3 serve-https.py
+python3 serve-https.py    # 证书缺失时自动探测局域网 IP 并生成自签证书（需 openssl）
 # 手机访问 https://<局域网IP>:8443/m.html，首次需信任证书
+# 证书生成在本目录（sle-*.pem，已 gitignore，私钥不入库）
 ```
 
 注意：语音连续对话在 Chrome / Edge 桌面与 Android 可用；iOS Safari 的
