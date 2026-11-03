@@ -20,8 +20,7 @@ openvela AI 硬件开发者大赛 2026，队伍 485 小鸣TV。目标板 SF32LB5
 跑法与已知限制见 [`prototype/README.md`](prototype/README.md)。
 
 **第二步，把两段验证接成商业叙事 —— [`docs/决赛路演_20261103/`](docs/决赛路演_20261103/)。**
-15 页路演（PPTX + PDF，每页含讲稿备注）：市场与米家生态位空白、Agent 闭环与
-音景引擎、硬件形态（床头"小月亮"，BOM ≈ 220 元）、商业模式（硬件 599-799 元 +
+15 页路演（PPTX + PDF，每页含讲稿备注）：市场与米家生态位空白、Agent 闭环与音景引擎、硬件形态（床头"小月亮"，BOM ≈ 220 元）、商业模式（硬件 599-799 元 +
 订阅 15 元/月，Hatch 已验证的公式 A）、竞品对比与路线图。
 
 现场演示材料在 [`docs/决赛演示_20261103/`](docs/决赛演示_20261103/)：
@@ -30,6 +29,28 @@ openvela AI 硬件开发者大赛 2026，队伍 485 小鸣TV。目标板 SF32LB5
 
 **口径**：本仓 09-19 及之前的提交是大赛原样材料，未做任何改动；
 上述两个目录是之后新增的决赛材料，时间与内容如实标注。
+
+## 开发 Skill 包：这套东西怎么被"重新造一次"
+
+这个作品从调研到样机、到路演材料，**99% 的代码与图由 AI 生成**。
+过程本身被固化成了 8 个 Skill，放在 [`dev-skills/`](dev-skills/)：
+
+| Skill | 干什么 |
+|---|---|
+| [orchestrator](dev-skills/orchestrator/SKILL.md) | 按 7 个阶段调度下面这些，每阶段一个验收门 |
+| [product-research](dev-skills/product-research/SKILL.md) | 赛道验证 / 生态位地图 / 竞品矩阵 |
+| [requirements](dev-skills/requirements/SKILL.md) | PRD：一条核心回路、三个不做、北极星 + 反向指标 |
+| [hardware](dev-skills/hardware/SKILL.md) | 形态、选型、BOM、引脚与声光热红线 |
+| [drawing](dev-skills/drawing/SKILL.md) | 三视图：模型只出渲染，标注全部用代码画 |
+| [backend](dev-skills/backend/SKILL.md) | 固件核心层 + 串口链路 + 断言式测试门 |
+| [frontend](dev-skills/frontend/SKILL.md) | 单文件原型 + 脚本化演示模式 + 六个真实 bug |
+| [poster](dev-skills/poster/SKILL.md) | 路演视觉：一页一论点、数据口径、两轮视觉审查 |
+
+注意与 [`skills/`](skills/) 的区别：`skills/` 是**跑在设备上的 Agent 技能**（哄睡/夜醒/晨间），
+`dev-skills/` 是**开发期给编码 Agent 的工序**。一套造产品，一套造另一套。
+
+给 Agent 一句「按 dev-skills 跑」，它会按阶段推进，每阶段停下来交验收物；
+不懂代码的人只需要做"选 A 还是选 B""这个数准不准"这类决策。
 
 ## 为什么核心是"对话"（第一性原理）
 
@@ -170,6 +191,7 @@ python tests/pc_build.py app       # 等价 make app
 | 路径 | 里面是什么 |
 |---|---|
 | `skills/` | **3 个 Agent Skill：sleep-onset / night-wake / sleep-review** —— 核心对话逻辑 |
+| `dev-skills/` | **8 个开发 Skill**：编排 / 调研 / 需求 / 硬件 / 图纸 / 后端 / 前端 / 海报 —— 开发期给编码 Agent 的工序，可复刻同类项目 |
 | `app/mianyu/` | 应用包：`mianyu_app_main.c`（主循环）+ `src/`（核心算法层 6 模块）+ `include/` + `hal/`（两个后端）+ `ui/`（手表界面与字体）+ 构建文件 |
 | `board/` | 板级集成源码（音频通路 bring-up + 串口语音链路）+ 云机构建集成存档；见 [`board/README.md`](board/README.md) |
 | `tests/` | 465 条单元测试 + `pc_build.py`（无 make 环境下的构建驱动） |
