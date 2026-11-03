@@ -52,6 +52,11 @@
 - 第 9 页记忆层 / 第 10 页一夜编排对应 `skills/` 三个 Skill 的行为
 - 第 13 页路线图第 1 步"原型已完成"即本仓 `prototype/`
 
+## 源码与重新生成
+
+PPT 是脚本生成的，源码在 [`source/`](source/)（`build.js` + 6 张截图）。
+改团队页姓名等文字后，`node build.js` 即可重出 PPTX（用法见 [`source/README.md`](source/README.md)）。
+
 ## 路演前待办
 
 - [ ] 团队页三张卡片姓名、封面与结尾页"参赛团队（占位）"替换为真实信息
